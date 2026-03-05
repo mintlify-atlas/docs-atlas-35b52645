@@ -1,0 +1,172 @@
+---
+title: 'Proyectos Model'
+description: 'API reference for the Proyectos (Projects) data model'
+---
+
+## Overview
+
+The `Proyectos` model represents projects in the system. Each project has a name, a project leader, and can have multiple team members assigned to it. This model inherits from `ModeloBase`, which provides automatic timestamping and soft delete functionality.
+
+## Model Definition
+
+```python
+class Proyectos(ModeloBase):
+    nombre_proyecto = models.CharField(max_length=100)
+    lider = models.ForeignKey(encargado, on_delete=models.CASCADE, related_name='proyectos_lider')
+    encargados = models.ManyToManyField(encargado, related_name='proyectos_encargados')
+    
+    def __str__(self):
+        return str(self.nombre_proyecto)
+```
+
+## Fields
+
+### Direct Fields
+
+<ParamField path="nombre_proyecto" type="CharField" required>
+  The name of the project.
+  
+  **Constraints:**
+  - Maximum length: 100 characters
+  - Required field (cannot be null or blank)
+</ParamField>
+
+<ParamField path="lider" type="ForeignKey" required>
+  Reference to the team member who leads this project.
+  
+  **Relationship Details:**
+  - References: `encargado` model
+  - On Delete: `CASCADE` - deleting the team member will delete the project
+  - Related Name: `proyectos_lider` - access from encargado as `encargado.proyectos_lider.all()`
+  - Required field
+</ParamField>
+
+<ParamField path="encargados" type="ManyToManyField">
+  Multiple team members assigned to work on this project.
+  
+  **Relationship Details:**
+  - References: `encargado` model
+  - Related Name: `proyectos_encargados` - access from encargado as `encargado.proyectos_encargados.all()`
+  - Can have zero or more team members
+</ParamField>
+
+### Inherited Fields (from ModeloBase)
+
+<ParamField path="fecha_registro" type="DateField" readonly>
+  The date when the project was created.
+  
+  **Constraints:**
+  - Automatically set on creation (`auto_now_add=True`)
+  - Read-only after creation
+  - Verbose name: "Fecha Registro"
+</ParamField>
+
+<ParamField path="hora_registro" type="TimeField" readonly>
+  The time when the project was created.
+  
+  **Constraints:**
+  - Automatically set on creation (`auto_now_add=True`)
+  - Read-only after creation
+  - Verbose name: "Hora Registro"
+</ParamField>
+
+<ParamField path="status" type="BooleanField" default="True">
+  Indicates whether the project is active or deleted (soft delete).
+  
+  **Constraints:**
+  - Default value: `True` (active)
+  - Set to `False` for soft deletion
+</ParamField>
+
+## Model Relationships
+
+### Forward Relationships
+
+<ResponseField name="lider" type="encargado">
+  Access the project leader:
+  ```python
+  proyecto = Proyectos.objects.get(id=1)
+  lider = proyecto.lider
+  print(lider.nombres)
+  ```
+</ResponseField>
+
+<ResponseField name="encargados" type="ManyToManyField">
+  Access all team members assigned to the project:
+  ```python
+  proyecto = Proyectos.objects.get(id=1)
+  team_members = proyecto.encargados.all()
+  for member in team_members:
+      print(member.nombres)
+  ```
+</ResponseField>
+
+### Reverse Relationships
+
+<Note>
+  The `Proyectos` model does not have any reverse relationships from other models.
+</Note>
+
+## String Representation
+
+The model's `__str__()` method returns the project name:
+
+```python
+def __str__(self):
+    return str(self.nombre_proyecto)
+```
+
+## Usage Examples
+
+### Creating a Project
+
+```python
+from CTP.models import Proyectos, encargado
+
+# Get or create a team member to be the leader
+lider = encargado.objects.get(id=1)
+
+# Create a new project
+proyecto = Proyectos.objects.create(
+    nombre_proyecto="Website Redesign",
+    lider=lider
+)
+
+# Add team members to the project
+team_member1 = encargado.objects.get(id=2)
+team_member2 = encargado.objects.get(id=3)
+proyecto.encargados.add(team_member1, team_member2)
+```
+
+### Querying Projects
+
+```python
+# Get all active projects
+active_projects = Proyectos.objects.filter(status=True)
+
+# Get projects led by a specific team member
+lider = encargado.objects.get(id=1)
+led_projects = Proyectos.objects.filter(lider=lider)
+# Or using reverse relationship
+led_projects = lider.proyectos_lider.all()
+
+# Get projects where a team member is assigned
+member = encargado.objects.get(id=2)
+assigned_projects = member.proyectos_encargados.all()
+```
+
+### Soft Deleting a Project
+
+```python
+proyecto = Proyectos.objects.get(id=1)
+proyecto.status = False
+proyecto.save()
+```
+
+<Warning>
+  Deleting an `encargado` who is a project leader will cascade delete all projects they lead. Use soft delete (`status=False`) to preserve data.
+</Warning>
+
+## Database Table
+
+This model is stored in the database table: `CTP_proyectos`

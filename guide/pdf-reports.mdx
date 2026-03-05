@@ -1,0 +1,401 @@
+---
+title: PDF Report Generation
+description: Learn how to generate, customize, and work with PDF reports in Proyecto
+---
+
+## Overview
+
+Proyecto includes built-in PDF report generation for projects, tasks, and team members. Reports are generated using Django templates and can be customized to meet your specific needs.
+
+<Note>
+PDF reports use the `pdflistado` action and render HTML templates from the `templates/pdf/` directory. The rendered HTML is returned as JSON for client-side PDF generation.
+</Note>
+
+## Report Types
+
+Proyecto supports three types of reports:
+
+1. **Project Reports** - List of all projects with leaders and team members
+2. **Task Reports** - List of all tasks with assignees
+3. **Team Member Reports** - List of all active team members
+
+## Generating Project Reports
+
+Project reports display all active projects with their leaders and assigned team members.
+
+### How to Generate
+
+<Steps>
+  <Step title="Navigate to Projects">
+    Go to the **Proyectos** section from the main menu.
+  </Step>
+  
+  <Step title="Access PDF Action">
+    Click the PDF generation button or access the URL with `?action=pdflistado`.
+  </Step>
+  
+  <Step title="View or Download">
+    The system renders the report template and returns it for PDF conversion.
+  </Step>
+</Steps>
+
+### Implementation Details
+
+```python
+# CTP/view_proyectos.py:107-118
+elif action == 'pdflistado':
+    proyectos = Proyectos.objects.filter(status=True).order_by('nombre_proyecto', 'lider')
+    data['listado'] = []
+    for proyecto in proyectos:
+        encargados = [e.nombres for e in proyecto.encargados.all()]
+        data['listado'].append({
+            'pk': proyecto.pk,
+            'nombre_proyecto': proyecto.nombre_proyecto,
+            'lider': proyecto.lider.nombres,
+            'encargados': encargados
+        })
+    return render(request, 'pdf/Proyectos/listadoP.html', data)
+```
+
+### Report Data Structure
+
+Each project in the report includes:
+
+- **pk**: Project primary key (unique identifier)
+- **nombre_proyecto**: Project name
+- **lider**: Project leader's name (from the related `encargado` model)
+- **encargados**: List of team member names assigned to the project
+
+<Accordion title="Example Project Report Data">
+```json
+{
+  "listado": [
+    {
+      "pk": 1,
+      "nombre_proyecto": "Website Redesign",
+      "lider": "John Smith",
+      "encargados": ["Jane Doe", "Bob Wilson", "Alice Johnson"]
+    },
+    {
+      "pk": 2,
+      "nombre_proyecto": "Mobile App Development",
+      "lider": "Jane Doe",
+      "encargados": ["John Smith", "Carol White"]
+    }
+  ]
+}
+```
+</Accordion>
+
+### Filtering and Sorting
+
+- **Filter**: Only active projects (`status=True`) are included
+- **Sort**: Projects are ordered by `nombre_proyecto` first, then by `lider`
+
+<Tip>
+The sorting ensures consistent report output and makes it easier to find specific projects in longer lists.
+</Tip>
+
+## Generating Task Reports
+
+Task reports list all active tasks with their assigned team members.
+
+### Implementation
+
+```python
+# CTP/view_registros.py:99-101
+elif action == 'pdflistado':
+    data['listado'] = Tareas.objects.filter().order_by('nombre_tarea')
+    return render(request, 'pdf/Tareas/listadoP.html', data)
+```
+
+### Report Contents
+
+Task reports include:
+
+- **Task name** (`nombre_tarea`)
+- **Assigned team member** (`encargados`)
+- **Status** (only active tasks with `status=True`)
+- **Registration date and time** (from `ModeloBase`)
+
+<Note>
+The task report implementation filters all tasks but should also include `status=True` filter for consistency with other reports.
+</Note>
+
+### Task Report Workflow
+
+<Steps>
+  <Step title="Navigate to Tasks">
+    Access the **Tareas** section from the main menu.
+  </Step>
+  
+  <Step title="Generate Report">
+    Click the PDF report button or access `?action=pdflistado`.
+  </Step>
+  
+  <Step title="Review Task List">
+    The report shows all tasks sorted alphabetically by task name.
+  </Step>
+</Steps>
+
+## Generating Team Member Reports
+
+Team member reports list all active team members in the system.
+
+### Implementation
+
+```python
+# CTP/view_trabajadores.py:98-100
+elif action == 'pdflistado':
+    data['listado'] = encargado.objects.filter(status=True).order_by('nombres')
+    return render(request, 'pdf/trabajadores/listadoM.html', data)
+```
+
+### Report Contents
+
+- **Team member name** (`nombres`)
+- **Registration date** (`fecha_registro`)
+- **Registration time** (`hora_registro`)
+- **Status** (only active members)
+
+### Use Cases
+
+- **Team directory**: Maintain an up-to-date list of active team members
+- **Resource planning**: View available team members for project assignment
+- **Auditing**: Track when team members were added to the system
+
+## PDF Template Location
+
+All PDF templates are stored in the `templates/pdf/` directory:
+
+```
+templates/
+└── pdf/
+    ├── Proyectos/
+    │   └── listadoP.html
+    ├── Tareas/
+    │   └── listadoP.html
+    └── trabajadores/
+        └── listadoM.html
+```
+
+<Warning>
+Template paths are hardcoded in the views. If you rename or move templates, update the paths in the corresponding view files.
+</Warning>
+
+## Customizing Report Templates
+
+You can customize the appearance and content of PDF reports by editing the HTML templates.
+
+### Template Context
+
+Each template receives a `data` dictionary with:
+
+- **empresa**: Company name (e.g., "Michael")
+- **nombre**: Report title (e.g., "Proyectos")
+- **ruta**: URL path
+- **listado**: Query result with report data
+
+### Customization Examples
+
+<Accordion title="Add Company Logo">
+  Edit the template to include your company logo:
+  
+  ```html
+  <!-- templates/pdf/Proyectos/listadoP.html -->
+  <div class="header">
+    <img src="{% static 'logo.png' %}" alt="Company Logo">
+    <h1>{{ empresa }} - {{ nombre }}</h1>
+  </div>
+  ```
+</Accordion>
+
+<Accordion title="Add Report Metadata">
+  Include generation date and user information:
+  
+  ```html
+  <div class="metadata">
+    <p>Generated: {{ now|date:"Y-m-d H:i:s" }}</p>
+    <p>Generated by: {{ user.username }}</p>
+  </div>
+  ```
+  
+  <Note>
+  You'll need to add these fields to the `data` dictionary in the view.
+  </Note>
+</Accordion>
+
+<Accordion title="Customize Project Display">
+  Format project data with additional styling:
+  
+  ```html
+  {% for proyecto in listado %}
+  <div class="proyecto">
+    <h3>{{ proyecto.nombre_proyecto }}</h3>
+    <div class="details">
+      <p><strong>Leader:</strong> {{ proyecto.lider }}</p>
+      <p><strong>Team:</strong> {{ proyecto.encargados|join:", " }}</p>
+    </div>
+  </div>
+  {% endfor %}
+  ```
+</Accordion>
+
+## Ajax PDF Generation
+
+Project and team member reports also support Ajax-based generation for dynamic loading:
+
+### Project Report Ajax
+
+```python
+# CTP/view_proyectos.py:66-72
+elif action == 'pdflistado':
+    try:
+        data['action'] = Proyectos.objects.get(id=request.GET['id'])
+        template = get_template("pdf/Proyectos/listadoP.html")
+        return JsonResponse({'data': template.render(data)})
+    except Exception as ex:
+        messages.error(request, ex)
+```
+
+This endpoint:
+- Accepts a project `id` parameter
+- Retrieves the specific project
+- Renders the template
+- Returns HTML as JSON for client-side processing
+
+### Team Member Report Ajax
+
+```python
+# CTP/view_trabajadores.py:51-59
+elif action == 'pdflistado':
+    with transaction.atomic():
+        try:
+            data['action'] = encargado.objects.get(id=request.GET['id'])
+            template = get_template('pdf/trabajadores/listadoM.html')
+            return JsonResponse({'data': template.render(data)})
+        except Exception as ex:
+            messages.error(request, ex)
+            return JsonResponse({"mensaje": mensaje})
+```
+
+<Note>
+The Ajax endpoints use `request.GET['id']` but the templates expect a list. You may need to adjust the template to handle single-record reports.
+</Note>
+
+## Best Practices
+
+### Performance Optimization
+
+<Tip>
+For large datasets, consider adding pagination or date filters to reports:
+
+```python
+# Example: Last 30 days only
+from django.utils import timezone
+from datetime import timedelta
+
+thirty_days_ago = timezone.now() - timedelta(days=30)
+proyectos = Proyectos.objects.filter(
+    status=True,
+    fecha_registro__gte=thirty_days_ago
+).order_by('nombre_proyecto')
+```
+</Tip>
+
+### Data Consistency
+
+- **Always filter by status**: Ensure deleted records don't appear in reports
+- **Use consistent ordering**: Makes reports easier to compare over time
+- **Handle missing data**: Check for null values in templates
+
+```html
+<!-- Handle potential null leader -->
+<p>Leader: {{ proyecto.lider.nombres|default:"No leader assigned" }}</p>
+```
+
+### Template Maintenance
+
+<Warning>
+**Keep templates in sync with models**. If you modify model fields, update the corresponding PDF templates to reflect the changes.
+</Warning>
+
+## Advanced Report Features
+
+### Adding Filters
+
+You can add date range or status filters to report generation:
+
+```python
+# Example: Filter by date range
+start_date = request.GET.get('start_date')
+end_date = request.GET.get('end_date')
+
+if start_date and end_date:
+    proyectos = Proyectos.objects.filter(
+        status=True,
+        fecha_registro__range=[start_date, end_date]
+    ).order_by('nombre_proyecto')
+```
+
+### Including Statistics
+
+Add summary statistics to your reports:
+
+```python
+# Example: Add statistics to project report
+data['total_projects'] = proyectos.count()
+data['total_leaders'] = proyectos.values('lider').distinct().count()
+data['total_team_members'] = encargado.objects.filter(status=True).count()
+```
+
+### Multi-Project Reports
+
+Generate reports for specific project sets:
+
+```python
+# Example: Report for projects with specific leader
+lider_id = request.GET.get('lider_id')
+if lider_id:
+    proyectos = Proyectos.objects.filter(
+        status=True,
+        lider_id=lider_id
+    ).order_by('nombre_proyecto')
+```
+
+## Error Handling
+
+All report generation includes error handling:
+
+```python
+try:
+    # Generate report
+    return render(request, template, data)
+except Exception as ex:
+    messages.error(request, ex)
+    return redirect(request.path)
+```
+
+<Tip>
+For production systems, implement more specific exception handling and logging:
+
+```python
+import logging
+logger = logging.getLogger(__name__)
+
+try:
+    # Report generation
+except Proyectos.DoesNotExist:
+    logger.error(f"Project not found: {id}")
+    messages.error(request, "Project not found")
+except Exception as ex:
+    logger.exception("Report generation failed")
+    messages.error(request, "Unable to generate report")
+```
+</Tip>
+
+## Next Steps
+
+- [Workflow Guide](/guide/workflow) - Learn the complete project management workflow
+- [Authentication](/guide/authentication) - Understand security and access control
+- [Customization](/customization) - Advanced template and view customization

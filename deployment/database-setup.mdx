@@ -1,0 +1,288 @@
+---
+title: 'Database Setup'
+description: 'Configure PostgreSQL database for Proyecto'
+---
+
+Proyecto uses PostgreSQL as its primary database backend. This guide walks you through installing PostgreSQL and configuring your database connection.
+
+## PostgreSQL Installation
+
+<Steps>
+  <Step title="Install PostgreSQL">
+    Install PostgreSQL on your system:
+
+    <CodeGroup>
+    ```bash Ubuntu/Debian
+    sudo apt update
+    sudo apt install postgresql postgresql-contrib
+    ```
+
+    ```bash macOS
+    brew install postgresql
+    brew services start postgresql
+    ```
+
+    ```bash Windows
+    # Download and run the installer from:
+    # https://www.postgresql.org/download/windows/
+    ```
+    </CodeGroup>
+  </Step>
+
+  <Step title="Start PostgreSQL Service">
+    Ensure PostgreSQL is running:
+
+    ```bash
+    # Ubuntu/Debian
+    sudo systemctl start postgresql
+    sudo systemctl enable postgresql
+
+    # Check status
+    sudo systemctl status postgresql
+    ```
+  </Step>
+
+  <Step title="Access PostgreSQL Shell">
+    Switch to the postgres user and access the PostgreSQL shell:
+
+    ```bash
+    sudo -u postgres psql
+    ```
+  </Step>
+
+  <Step title="Create Database">
+    Create the Proyecto database:
+
+    ```sql
+    CREATE DATABASE "Proyecto";
+    ```
+
+    <Note>
+      The database name is case-sensitive and must match the NAME setting in your Django configuration.
+    </Note>
+  </Step>
+
+  <Step title="Create Database User (Optional)">
+    For production, create a dedicated database user:
+
+    ```sql
+    CREATE USER proyecto_user WITH PASSWORD 'secure_password';
+    ALTER ROLE proyecto_user SET client_encoding TO 'utf8';
+    ALTER ROLE proyecto_user SET default_transaction_isolation TO 'read committed';
+    ALTER ROLE proyecto_user SET timezone TO 'UTC';
+    GRANT ALL PRIVILEGES ON DATABASE "Proyecto" TO proyecto_user;
+    ```
+
+    <Warning>
+      Replace `secure_password` with a strong, randomly generated password.
+    </Warning>
+  </Step>
+</Steps>
+
+## Database Configuration
+
+Configure your database connection in `proyecto/settings.py`:
+
+```python proyecto/settings.py
+DATABASES = {
+    'default': {
+        'ENGINE': 'django.db.backends.postgresql_psycopg2',
+        'NAME': 'Proyecto',
+        'USER': 'postgres',
+        'PASSWORD': '1204',
+        'HOST': 'localhost',
+        'PORT': '5432',
+        'ATOMIC_REQUESTS': True,
+    }
+}
+```
+
+### Configuration Parameters
+
+<ParamField path="ENGINE" type="string" required>
+  Database backend engine. Proyecto uses `django.db.backends.postgresql_psycopg2` for PostgreSQL support.
+</ParamField>
+
+<ParamField path="NAME" type="string" required>
+  Database name. Default is `Proyecto`.
+</ParamField>
+
+<ParamField path="USER" type="string" required>
+  Database user with access privileges. Default is `postgres`.
+</ParamField>
+
+<ParamField path="PASSWORD" type="string" required>
+  Database password for authentication.
+</ParamField>
+
+<ParamField path="HOST" type="string" default="localhost">
+  Database server hostname or IP address.
+</ParamField>
+
+<ParamField path="PORT" type="string" default="5432">
+  PostgreSQL server port.
+</ParamField>
+
+<ParamField path="ATOMIC_REQUESTS" type="boolean" default="True">
+  When set to `True`, wraps each view in a database transaction. This ensures data consistency by automatically rolling back changes if an exception occurs.
+</ParamField>
+
+<Tip>
+  Use environment variables for sensitive database credentials instead of hardcoding them in settings.py.
+</Tip>
+
+## Install Database Adapter
+
+Install the PostgreSQL adapter for Python:
+
+```bash
+pip install psycopg2==2.9.5
+```
+
+This package is included in `requirements.txt` and provides the PostgreSQL database adapter for Django.
+
+## Running Migrations
+
+After configuring your database, apply migrations to create the necessary tables:
+
+<Steps>
+  <Step title="Make Migrations">
+    Generate migration files for your models:
+
+    ```bash
+    python manage.py makemigrations
+    ```
+  </Step>
+
+  <Step title="Apply Migrations">
+    Apply all pending migrations:
+
+    ```bash
+    python manage.py migrate
+    ```
+
+    This creates all required database tables, including:
+    - Django's built-in tables (auth, sessions, admin)
+    - CTP application tables
+  </Step>
+
+  <Step title="Create Superuser">
+    Create an admin user to access the Django admin interface:
+
+    ```bash
+    python manage.py createsuperuser
+    ```
+  </Step>
+</Steps>
+
+## Environment Variables
+
+For production deployments, use environment variables for database credentials:
+
+```python proyecto/settings.py
+import os
+
+DATABASES = {
+    'default': {
+        'ENGINE': 'django.db.backends.postgresql_psycopg2',
+        'NAME': os.environ.get('DB_NAME', 'Proyecto'),
+        'USER': os.environ.get('DB_USER', 'postgres'),
+        'PASSWORD': os.environ.get('DB_PASSWORD'),
+        'HOST': os.environ.get('DB_HOST', 'localhost'),
+        'PORT': os.environ.get('DB_PORT', '5432'),
+        'ATOMIC_REQUESTS': True,
+    }
+}
+```
+
+Set environment variables:
+
+```bash
+export DB_NAME="Proyecto"
+export DB_USER="proyecto_user"
+export DB_PASSWORD="your_secure_password"
+export DB_HOST="localhost"
+export DB_PORT="5432"
+```
+
+## Database Backup
+
+<Warning>
+  Regular backups are critical for data protection. Always test your backup restoration process.
+</Warning>
+
+### Create a Backup
+
+```bash
+pg_dump -U postgres -h localhost -d Proyecto > proyecto_backup.sql
+```
+
+### Restore from Backup
+
+```bash
+psql -U postgres -h localhost -d Proyecto < proyecto_backup.sql
+```
+
+### Automated Backups
+
+Create a cron job for daily backups:
+
+```bash
+# Edit crontab
+crontab -e
+
+# Add daily backup at 2 AM
+0 2 * * * pg_dump -U postgres -d Proyecto > /backups/proyecto_$(date +\%Y\%m\%d).sql
+```
+
+<Tip>
+  Store backups in a separate location from your database server for disaster recovery.
+</Tip>
+
+## Connection Testing
+
+Verify your database connection:
+
+```bash
+python manage.py dbshell
+```
+
+This opens a PostgreSQL shell connected to your configured database. You can run SQL queries to verify connectivity:
+
+```sql
+\dt  -- List all tables
+\q  -- Quit
+```
+
+## Troubleshooting
+
+### Connection Refused
+
+If you see connection errors, check:
+
+1. PostgreSQL is running: `sudo systemctl status postgresql`
+2. PostgreSQL is listening on the correct port: `sudo netstat -plnt | grep 5432`
+3. `pg_hba.conf` allows local connections
+
+### Authentication Failed
+
+Verify database credentials:
+
+```bash
+psql -U postgres -d Proyecto -h localhost
+```
+
+If this fails, reset the postgres user password:
+
+```bash
+sudo -u postgres psql
+\password postgres
+```
+
+### Database Does Not Exist
+
+Create the database if it doesn't exist:
+
+```bash
+sudo -u postgres createdb Proyecto
+```

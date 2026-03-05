@@ -1,0 +1,513 @@
+---
+title: 'Django Forms'
+description: 'API reference for Django ModelForm classes used in the Proyecto system'
+---
+
+## Overview
+
+The Proyecto system uses Django's ModelForm framework to handle form rendering, validation, and data processing. All forms are defined in `CTP/forms.py` and inherit from `forms.ModelForm`, providing automatic form generation from Django models with customizable widgets and validation.
+
+**Location:** `CTP/forms.py`
+
+## Form Classes
+
+### ProjectForm
+
+ModelForm for creating and editing projects (Proyectos).
+
+**Location:** `CTP/forms.py:27`
+
+```python
+class ProjectForm(forms.ModelForm):
+    class Meta:
+        model = Proyectos
+        fields = ['nombre_proyecto', 'lider','encargados']
+        widgets = {
+            'nombre_proyecto': forms.TextInput(attrs={'class': 'form-control'}),
+            'lider': forms.Select(attrs={'class': 'form-control'}),
+            'encargados': forms.SelectMultiple(attrs={'class': 'form_control select2'}),
+        }
+        labels = {'nombre_proyecto': 'nombre_proyecto', 'lider': 'lider', 'encargados':'encargados' }
+```
+
+#### Meta Configuration
+
+<ParamField path="model" type="Model" default="Proyectos">
+  The Django model this form is based on
+</ParamField>
+
+<ParamField path="fields" type="list" default="['nombre_proyecto', 'lider', 'encargados']">
+  List of model fields to include in the form
+</ParamField>
+
+#### Fields
+
+<ParamField path="nombre_proyecto" type="CharField">
+  **Widget:** `TextInput` with CSS class `form-control`
+  
+  **Label:** "nombre_proyecto"
+  
+  **Description:** Project name field. Must be unique per validation in viewProyectos.
+  
+  **HTML Attributes:**
+  ```python
+  {'class': 'form-control'}
+  ```
+</ParamField>
+
+<ParamField path="lider" type="ForeignKey">
+  **Widget:** `Select` with CSS class `form-control`
+  
+  **Label:** "lider"
+  
+  **Description:** Project leader selection. References the `encargado` model as a foreign key.
+  
+  **HTML Attributes:**
+  ```python
+  {'class': 'form-control'}
+  ```
+</ParamField>
+
+<ParamField path="encargados" type="ManyToManyField">
+  **Widget:** `SelectMultiple` with CSS classes `form_control select2`
+  
+  **Label:** "encargados"
+  
+  **Description:** Multiple team member selection. Uses Select2 JavaScript library for enhanced multi-select functionality.
+  
+  **HTML Attributes:**
+  ```python
+  {'class': 'form_control select2'}
+  ```
+  
+  <Note>
+    The `select2` class enables the Select2 jQuery plugin for searchable dropdown with multiple selections.
+  </Note>
+</ParamField>
+
+#### Usage Example
+
+```python
+# Creating a new project form
+form = ProjectForm()
+
+# Form with POST data
+form = ProjectForm(request.POST)
+if form.is_valid():
+    proyecto = Proyectos(
+        nombre_proyecto=form.cleaned_data['nombre_proyecto'],
+        lider=form.cleaned_data['lider']
+    )
+    proyecto.save()
+    encargados = form.cleaned_data['encargados']
+    proyecto.encargados.set(encargados)
+
+# Editing existing project
+proyecto = Proyectos.objects.get(id=id)
+form = ProjectForm(request.POST, instance=proyecto)
+if form.is_valid():
+    form.save()
+```
+
+---
+
+### TareasForm
+
+ModelForm for creating and editing tasks (Tareas).
+
+**Location:** `CTP/forms.py:17`
+
+```python
+class TareasForm(forms.ModelForm):
+    class Meta:
+        model = Tareas
+        fields = ['nombre_tarea', 'encargados']
+        widgets = {
+            'nombre_tarea': forms.TextInput(attrs={'class': 'form-control'}),
+            'encargados': forms.Select(attrs={'class': 'form-control'})
+        }
+        labels = {'nombre_tarea': 'nombre_tarea', 'encargados': 'lider'}
+```
+
+#### Meta Configuration
+
+<ParamField path="model" type="Model" default="Tareas">
+  The Django model this form is based on
+</ParamField>
+
+<ParamField path="fields" type="list" default="['nombre_tarea', 'encargados']">
+  List of model fields to include in the form
+</ParamField>
+
+#### Fields
+
+<ParamField path="nombre_tarea" type="CharField">
+  **Widget:** `TextInput` with CSS class `form-control`
+  
+  **Label:** "nombre_tarea"
+  
+  **Description:** Task name field. Must be unique per validation in viewTareas.
+  
+  **HTML Attributes:**
+  ```python
+  {'class': 'form-control'}
+  ```
+</ParamField>
+
+<ParamField path="encargados" type="ForeignKey">
+  **Widget:** `Select` with CSS class `form-control`
+  
+  **Label:** "lider" (note: label differs from field name)
+  
+  **Description:** Team member assigned to the task. References the `encargado` model as a foreign key.
+  
+  **HTML Attributes:**
+  ```python
+  {'class': 'form-control'}
+  ```
+  
+  <Note>
+    The label is set to "lider" while the field name is "encargados", which may cause confusion. This appears to be a naming inconsistency in the original code.
+  </Note>
+</ParamField>
+
+#### Usage Example
+
+```python
+# Creating a new task form
+form = TareasForm()
+
+# Form with POST data
+form = TareasForm(request.POST)
+if form.is_valid():
+    tareas = Tareas(
+        nombre_tarea=form.cleaned_data['nombre_tarea'],
+        encargados=form.cleaned_data['encargados']
+    )
+    tareas.save(request)
+
+# Editing existing task
+tareas = Tareas.objects.get(id=id)
+form = TareasForm(request.POST, instance=tareas)
+if form.is_valid():
+    form.save()
+```
+
+---
+
+### trabajadoresForm
+
+ModelForm for creating and editing team members (encargado).
+
+**Location:** `CTP/forms.py:7`
+
+```python
+class trabajadoresForm(forms.ModelForm):
+    class Meta:
+        model = encargado
+        fields = ['nombres']
+        widgets = {
+            'nombres': forms.TextInput(attrs={'class': 'form-control',
+                                             "placeholder": 'Ingresa el nombre'}), }
+        labels = {'nombres': 'nombres'}
+```
+
+#### Meta Configuration
+
+<ParamField path="model" type="Model" default="encargado">
+  The Django model this form is based on
+</ParamField>
+
+<ParamField path="fields" type="list" default="['nombres']">
+  List of model fields to include in the form (single field)
+</ParamField>
+
+#### Fields
+
+<ParamField path="nombres" type="CharField">
+  **Widget:** `TextInput` with CSS class `form-control` and placeholder
+  
+  **Label:** "nombres"
+  
+  **Description:** Team member name field. Must be unique per validation in viewtrabajadores.
+  
+  **HTML Attributes:**
+  ```python
+  {
+      'class': 'form-control',
+      'placeholder': 'Ingresa el nombre'
+  }
+  ```
+  
+  **Placeholder:** "Ingresa el nombre" (Spanish: "Enter the name")
+</ParamField>
+
+#### Usage Example
+
+```python
+# Creating a new team member form
+form = trabajadoresForm()
+
+# Form with POST data
+form = trabajadoresForm(request.POST)
+if form.is_valid():
+    Encargado = encargado(nombres=form.cleaned_data['nombres'])
+    Encargado.save(request)
+
+# Editing existing team member
+Encargado = encargado.objects.get(id=id)
+form = trabajadoresForm(request.POST, instance=Encargado)
+if form.is_valid():
+    form.save()
+```
+
+---
+
+### encargadoform
+
+ModelForm for selecting team members (encargados) from projects.
+
+**Location:** `CTP/forms.py:38`
+
+```python
+class encargadoform(forms.ModelForm):
+    class Meta:
+        model = Proyectos
+        fields = ['encargados']
+        widgets = {
+            'encargados': forms.Select(attrs={'class': 'form-control'})
+        }
+        labels = {'encargados': 'encargados'}
+```
+
+#### Meta Configuration
+
+<ParamField path="model" type="Model" default="Proyectos">
+  The Django model this form is based on (uses Proyectos model)
+</ParamField>
+
+<ParamField path="fields" type="list" default="['encargados']">
+  List of model fields to include in the form (single field)
+</ParamField>
+
+#### Fields
+
+<ParamField path="encargados" type="ManyToManyField">
+  **Widget:** `Select` (single selection from many-to-many relationship)
+  
+  **Label:** "encargados"
+  
+  **Description:** Single team member selection from project's assigned team members.
+  
+  **HTML Attributes:**
+  ```python
+  {'class': 'form-control'}
+  ```
+  
+  <Note>
+    Despite being a ManyToManyField in the model, this form uses a `Select` widget (not `SelectMultiple`), limiting selection to a single team member.
+  </Note>
+</ParamField>
+
+#### Usage Example
+
+```python
+# Creating a form to select an encargado
+form = encargadoform()
+
+# Rendering in template
+{{ form.encargados }}
+```
+
+## Form Architecture
+
+### Base Class
+
+All forms inherit from `django.forms.ModelForm`, which provides:
+
+- Automatic form field generation from model fields
+- Built-in validation based on model field constraints
+- Easy integration with Django's ORM
+- Automatic form rendering in templates
+
+### Widget System
+
+Forms use Django's widget system to control HTML rendering:
+
+<ResponseField name="TextInput" type="widget">
+  Renders as `<input type="text">` HTML element
+  
+  **Common Usage:** Text fields, names, titles
+</ResponseField>
+
+<ResponseField name="Select" type="widget">
+  Renders as `<select>` HTML dropdown element
+  
+  **Common Usage:** Foreign key relationships, single choice fields
+</ResponseField>
+
+<ResponseField name="SelectMultiple" type="widget">
+  Renders as `<select multiple>` HTML element
+  
+  **Common Usage:** Many-to-many relationships, multiple choice fields
+</ResponseField>
+
+### CSS Framework Integration
+
+All forms use Bootstrap CSS classes for styling:
+
+```python
+attrs={'class': 'form-control'}
+```
+
+<Note>
+  The `form-control` class is from Bootstrap and provides consistent styling across all form inputs. Some forms also use `select2` for enhanced JavaScript functionality.
+</Note>
+
+## Form Validation
+
+### Automatic Validation
+
+ModelForms automatically validate based on model constraints:
+
+```python
+if form.is_valid():
+    # Form data is valid
+    form.save()
+else:
+    # Form has errors
+    print(form.errors)
+```
+
+### Custom Validation
+
+Views implement additional validation logic:
+
+**Duplicate Checking:**
+```python
+# ProjectForm - view_proyectos.py:23
+if Proyectos.objects.filter(nombre_proyecto=request.POST['nombre_proyecto']).exists():
+    messages.error(request, 'El nombre está repetido')
+    return redirect('{}?action=agregar'.format(request.path))
+
+# TareasForm - view_registros.py:24
+if Tareas.objects.filter(nombre_tarea=request.POST['nombre_tarea']).exists():
+    messages.error(request, 'El nombre está repetido')
+    return redirect('{}?action=agregar'.format(request.path))
+
+# trabajadoresForm - view_trabajadores.py:24
+if encargado.objects.filter(nombres=request.POST['nombres']).exists():
+    messages.error(request, 'Registro ya existe')
+    return redirect('{}?action=agregar'.format(request.path))
+```
+
+## Form Rendering
+
+### Template Usage
+
+Forms can be rendered in templates using various methods:
+
+**Full Form:**
+```django
+{{ form.as_p }}
+```
+
+**Individual Fields:**
+```django
+{{ form.nombre_proyecto }}
+{{ form.lider }}
+{{ form.encargados }}
+```
+
+**With Labels:**
+```django
+<label>{{ form.nombre_proyecto.label }}</label>
+{{ form.nombre_proyecto }}
+```
+
+### JavaScript Integration
+
+Forms integrate with JavaScript libraries:
+
+<ResponseField name="select2" type="JavaScript Library">
+  Enhanced multi-select dropdowns with search functionality
+  
+  **Usage:** Applied to `ProjectForm.encargados` field via CSS class
+  
+  ```python
+  'encargados': forms.SelectMultiple(attrs={'class': 'form_control select2'})
+  ```
+</ResponseField>
+
+## Dependencies
+
+```python
+from django import forms
+from CTP.models import Tareas, encargado, Proyectos
+from django.contrib.auth.forms import UserCreationForm
+```
+
+<Note>
+  `UserCreationForm` is imported but not used in the current implementation. This may be for future authentication features.
+</Note>
+
+## Related Resources
+
+- [Project Views](/api/views/project-views) - Views using ProjectForm
+- [Task Views](/api/views/task-views) - Views using TareasForm
+- [Team Views](/api/views/team-views) - Views using trabajadoresForm
+- [Proyectos Model](/api/models/projects)
+- [Tareas Model](/api/models/tasks)
+- [encargado Model](/api/models/team-members)
+
+## Best Practices
+
+### Form Initialization
+
+**Empty Form (Add Action):**
+```python
+form = ProjectForm()
+```
+
+**Form with Data (POST):**
+```python
+form = ProjectForm(request.POST)
+```
+
+**Form with Instance (Edit Action):**
+```python
+proyecto = Proyectos.objects.get(id=id)
+form = ProjectForm(request.POST, instance=proyecto)
+```
+
+**Form with Initial Data:**
+```python
+form = ProjectForm(initial=model_to_dict(proyecto))
+```
+
+### Error Handling
+
+Always check form validity before saving:
+
+```python
+form = ProjectForm(request.POST)
+if form.is_valid():
+    form.save()
+    messages.success(request, 'Saved successfully')
+else:
+    messages.error(request, 'Validation failed')
+```
+
+### Many-to-Many Relationships
+
+Handle many-to-many fields separately when creating objects:
+
+```python
+proyecto = Proyectos(
+    nombre_proyecto=form.cleaned_data['nombre_proyecto'],
+    lider=form.cleaned_data['lider']
+)
+proyecto.save()  # Must save first
+encargados = form.cleaned_data['encargados']
+proyecto.encargados.set(encargados)  # Then set M2M
+```

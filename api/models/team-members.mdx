@@ -1,0 +1,251 @@
+---
+title: 'encargado Model'
+description: 'API reference for the encargado (Team Member) data model'
+---
+
+## Overview
+
+The `encargado` model represents team members or managers in the system. Team members can be assigned as project leaders, project team members, and task assignees. This model inherits from `ModeloBase`, which provides automatic timestamping and soft delete functionality.
+
+## Model Definition
+
+```python
+class encargado(ModeloBase):
+    nombres = models.CharField(null=True, blank=True, max_length=100)
+    
+    def __str__(self):
+        return self.nombres
+```
+
+## Fields
+
+### Direct Fields
+
+<ParamField path="nombres" type="CharField">
+  The name(s) of the team member.
+  
+  **Constraints:**
+  - Maximum length: 100 characters
+  - Optional: `null=True, blank=True` - can be empty or null
+</ParamField>
+
+### Inherited Fields (from ModeloBase)
+
+The `encargado` model inherits the following fields from the abstract `ModeloBase` class:
+
+<ParamField path="fecha_registro" type="DateField" readonly>
+  The date when the team member was registered.
+  
+  **Constraints:**
+  - Automatically set on creation (`auto_now_add=True`)
+  - Read-only after creation
+  - Verbose name: "Fecha Registro"
+</ParamField>
+
+<ParamField path="hora_registro" type="TimeField" readonly>
+  The time when the team member was registered.
+  
+  **Constraints:**
+  - Automatically set on creation (`auto_now_add=True`)
+  - Read-only after creation
+  - Verbose name: "Hora Registro"
+</ParamField>
+
+<ParamField path="status" type="BooleanField" default="True">
+  Indicates whether the team member is active or deleted (soft delete).
+  
+  **Constraints:**
+  - Default value: `True` (active)
+  - Set to `False` for soft deletion
+</ParamField>
+
+## ModeloBase Abstract Model
+
+The `ModeloBase` abstract model provides common fields for all models in the system:
+
+```python
+class ModeloBase(models.Model):
+    fecha_registro = models.DateField(
+        verbose_name="Fecha Registro", auto_now_add=True)
+    hora_registro = models.TimeField(
+        verbose_name="Hora Registro", auto_now_add=True)
+    status = models.BooleanField(default=True)
+
+    class Meta:
+        abstract = True
+```
+
+<Note>
+  The `ModeloBase` model is abstract and does not create its own database table. It only provides fields to models that inherit from it.
+</Note>
+
+## Model Relationships
+
+While the `encargado` model has no forward relationships (foreign keys), it has several important reverse relationships:
+
+### Reverse Relationships
+
+<ResponseField name="proyectos_lider" type="QuerySet[Proyectos]">
+  Access all projects where this team member is the leader:
+  ```python
+  member = encargado.objects.get(id=1)
+  led_projects = member.proyectos_lider.all()
+  for project in led_projects:
+      print(project.nombre_proyecto)
+  ```
+  
+  **Relationship Details:**
+  - Related from: `Proyectos.lider` field
+  - Type: One-to-Many (one leader can lead many projects)
+</ResponseField>
+
+<ResponseField name="proyectos_encargados" type="ManyToManyField">
+  Access all projects where this team member is assigned (not necessarily as leader):
+  ```python
+  member = encargado.objects.get(id=1)
+  assigned_projects = member.proyectos_encargados.all()
+  for project in assigned_projects:
+      print(project.nombre_proyecto)
+  ```
+  
+  **Relationship Details:**
+  - Related from: `Proyectos.encargados` field
+  - Type: Many-to-Many (team member can be on many projects, projects can have many team members)
+</ResponseField>
+
+<ResponseField name="tareas_set" type="QuerySet[Tareas]">
+  Access all tasks assigned to this team member:
+  ```python
+  member = encargado.objects.get(id=1)
+  tasks = member.tareas_set.all()
+  for task in tasks:
+      print(task.nombre_tarea)
+  ```
+  
+  **Relationship Details:**
+  - Related from: `Tareas.encargados` field
+  - Type: One-to-Many (one team member can have many tasks)
+  - Uses default reverse name since no `related_name` specified
+</ResponseField>
+
+## String Representation
+
+The model's `__str__()` method returns the team member's name:
+
+```python
+def __str__(self):
+    return self.nombres
+```
+
+<Warning>
+  Since `nombres` can be `None`, the string representation may return `None` for team members without names.
+</Warning>
+
+## Usage Examples
+
+### Creating a Team Member
+
+```python
+from CTP.models import encargado
+
+# Create a new team member
+member = encargado.objects.create(
+    nombres="Juan Pérez"
+)
+```
+
+### Querying Team Members
+
+```python
+# Get all active team members
+active_members = encargado.objects.filter(status=True)
+
+# Get a specific team member by name
+member = encargado.objects.get(nombres="Juan Pérez")
+
+# Get team members with names (excluding null/empty)
+named_members = encargado.objects.exclude(nombres__isnull=True).exclude(nombres='')
+```
+
+### Accessing Related Projects and Tasks
+
+```python
+member = encargado.objects.get(id=1)
+
+# Get all projects this member leads
+led_projects = member.proyectos_lider.all()
+print(f"{member.nombres} leads {led_projects.count()} projects")
+
+# Get all projects this member is assigned to
+assigned_projects = member.proyectos_encargados.all()
+print(f"{member.nombres} is on {assigned_projects.count()} projects")
+
+# Get all tasks assigned to this member
+tasks = member.tareas_set.all()
+print(f"{member.nombres} has {tasks.count()} tasks")
+
+# Get only active tasks
+active_tasks = member.tareas_set.filter(status=True)
+```
+
+### Checking Workload
+
+```python
+member = encargado.objects.get(id=1)
+
+# Count total responsibilities
+led_count = member.proyectos_lider.count()
+assigned_count = member.proyectos_encargados.count()
+task_count = member.tareas_set.filter(status=True).count()
+
+print(f"Workload for {member.nombres}:")
+print(f"  - Leading: {led_count} projects")
+print(f"  - Assigned to: {assigned_count} projects")
+print(f"  - Active tasks: {task_count}")
+```
+
+### Soft Deleting a Team Member
+
+```python
+member = encargado.objects.get(id=1)
+member.status = False
+member.save()
+
+# Query only active members
+active_members = encargado.objects.filter(status=True)
+```
+
+<Warning>
+  **Cascade Deletion:** Permanently deleting an `encargado` instance will cascade delete:
+  - All projects they lead (`Proyectos.lider`)
+  - All tasks assigned to them (`Tareas.encargados`)
+  
+  Consider using soft delete (`status=False`) or reassigning projects/tasks before deletion.
+</Warning>
+
+## Database Table
+
+This model is stored in the database table: `CTP_encargado`
+
+## Best Practices
+
+<Note>
+  **Soft Delete Pattern:** The `status` field implements a soft delete pattern. Instead of permanently deleting records, set `status=False` to maintain referential integrity and historical data.
+  
+  ```python
+  # Soft delete
+  member.status = False
+  member.save()
+  
+  # Query active records
+  active_members = encargado.objects.filter(status=True)
+  ```
+</Note>
+
+<Note>
+  **Timestamp Tracking:** The `fecha_registro` and `hora_registro` fields automatically track when each team member was created. These fields are read-only and cannot be modified after creation.
+</Note>
+
+<Note>
+  **Optional Names:** Team members can be created without a name (`null=True, blank=True`). Your application logic should handle cases where `nombres` is `None`.
+</Note>

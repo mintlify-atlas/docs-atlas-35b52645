@@ -1,0 +1,245 @@
+---
+title: Authentication & Security
+description: Learn how to manage user authentication, sessions, and security in Proyecto
+---
+
+## Overview
+
+Proyecto uses Django's built-in authentication system (`django.contrib.auth`) to provide secure user authentication and session management. The system enforces strict security policies including short session timeouts and comprehensive password validation.
+
+<Note>
+All views in Proyecto require authentication. Unauthenticated users are automatically redirected to the login page.
+</Note>
+
+## Session Management
+
+Proyecto implements strict session security with the following configuration:
+
+```python
+# proyecto/settings.py:30-31
+SESSION_COOKIE_AGE = 300  # 5 minutes (300 seconds)
+SESSION_EXPIRE_AT_BROWSER_CLOSE = True
+```
+
+### Session Behavior
+
+- **Session Duration**: Sessions automatically expire after 5 minutes of inactivity
+- **Browser Close**: Sessions are terminated when you close your browser
+- **Security**: This prevents unauthorized access if you leave your workstation unattended
+
+<Warning>
+With a 5-minute session timeout, you'll need to log in frequently. Plan to save your work regularly to avoid losing data when your session expires.
+</Warning>
+
+## Login System
+
+### Login Process
+
+Proyecto uses Django's authentication middleware to handle user login:
+
+```python
+# proyecto/settings.py:133-134
+LOGIN_REDIRECT_URL = '/'
+LOGOUT_REDIRECT_URL = '/'
+```
+
+<Steps>
+  <Step title="Access the Login Page">
+    Navigate to the login URL. If you try to access any protected page, you'll be automatically redirected to login.
+  </Step>
+  
+  <Step title="Enter Credentials">
+    Provide your username and password. These are validated against Django's User model.
+  </Step>
+  
+  <Step title="Authentication">
+    Django authenticates your credentials using the AuthenticationMiddleware (settings.py:48).
+  </Step>
+  
+  <Step title="Redirect to Dashboard">
+    Upon successful login, you're redirected to the home page (`/`), which displays the main dashboard.
+  </Step>
+</Steps>
+
+### Protected Views
+
+All views in Proyecto are protected with the `@login_required` decorator:
+
+```python
+# Example from seguridad/menu.py:6-18
+@login_required
+def menuinicial(request):
+    data = {
+        'ruta': '/',
+        'empresa': 'CTP',
+        'nombre': 'Inicio',
+        'totalencarga': encargado.objects.all().count(),
+        'totalta': Tareas.objects.all().count(),
+        'totalpro': Proyectos.objects.all().count(),
+        'user': request.user
+    }
+    return render(request, 'menu.html', data)
+```
+
+The `@login_required` decorator ensures that:
+- Only authenticated users can access the view
+- Unauthenticated requests are redirected to the login page
+- The current user is available via `request.user`
+
+## Creating Superusers
+
+Superusers have full administrative access to the system. You can create them using the custom user creation interface:
+
+```python
+# CTP/crearusuario.py:4-15
+def crear_superusuario(request):
+    if request.method == 'POST':
+        username = request.POST['username']
+        password1 = request.POST['password1']
+        password2 = request.POST['password2']
+        if password1 != password2:
+            error = 'Las contraseñas no coinciden, porfavor intentelo de nuevo'
+            return render(request, 'registration/pruebas.html', {'error': error})
+        User.objects.create_superuser(username=username, password=password1)
+        return render(request, 'registration/login.html')
+```
+
+<Steps>
+  <Step title="Navigate to User Creation">
+    Access the superuser creation form at the designated URL.
+  </Step>
+  
+  <Step title="Enter Username">
+    Provide a unique username for the new superuser.
+  </Step>
+  
+  <Step title="Set Password">
+    Enter and confirm a password that meets all validation requirements.
+  </Step>
+  
+  <Step title="Create Account">
+    Submit the form. The system validates that passwords match before creating the account.
+  </Step>
+</Steps>
+
+<Tip>
+Alternatively, you can create superusers via the Django management command:
+```bash
+python manage.py createsuperuser
+```
+</Tip>
+
+## Password Validation
+
+Proyecto enforces strict password requirements using Django's built-in validators:
+
+```python
+# proyecto/settings.py:91-104
+AUTH_PASSWORD_VALIDATORS = [
+    {
+        'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator',
+    },
+    {
+        'NAME': 'django.contrib.auth.password_validation.MinimumLengthValidator',
+    },
+    {
+        'NAME': 'django.contrib.auth.password_validation.CommonPasswordValidator',
+    },
+    {
+        'NAME': 'django.contrib.auth.password_validation.NumericPasswordValidator',
+    },
+]
+```
+
+### Password Requirements
+
+<Accordion title="UserAttributeSimilarityValidator">
+  Prevents passwords that are too similar to user attributes like username or email. This stops users from creating easily guessable passwords.
+</Accordion>
+
+<Accordion title="MinimumLengthValidator">
+  Enforces a minimum password length (default: 8 characters). Longer passwords are more resistant to brute-force attacks.
+</Accordion>
+
+<Accordion title="CommonPasswordValidator">
+  Rejects commonly used passwords (e.g., "password123", "qwerty"). This validator checks against a list of thousands of common passwords.
+</Accordion>
+
+<Accordion title="NumericPasswordValidator">
+  Prevents entirely numeric passwords (e.g., "12345678"). Passwords must contain a mix of character types.
+</Accordion>
+
+## Security Middleware
+
+Proyecto implements Django's security middleware stack:
+
+```python
+# proyecto/settings.py:43-51
+MIDDLEWARE = [
+    'django.middleware.security.SecurityMiddleware',
+    'django.contrib.sessions.middleware.SessionMiddleware',
+    'django.middleware.common.CommonMiddleware',
+    'django.middleware.csrf.CsrfViewMiddleware',
+    'django.contrib.auth.middleware.AuthenticationMiddleware',
+    'django.contrib.messages.middleware.MessageMiddleware',
+    'django.middleware.clickjacking.XFrameOptionsMiddleware',
+]
+```
+
+### Security Features
+
+- **SecurityMiddleware**: Provides various security enhancements like SSL/HTTPS redirects
+- **CsrfViewMiddleware**: Protects against Cross-Site Request Forgery attacks
+- **AuthenticationMiddleware**: Associates users with requests based on sessions
+- **XFrameOptionsMiddleware**: Prevents clickjacking attacks by controlling iframe embedding
+
+## Security Best Practices
+
+<Warning>
+The current configuration includes a hardcoded `SECRET_KEY` in settings.py:22. In production, you should:
+- Move the SECRET_KEY to environment variables
+- Generate a new, unique secret key
+- Never commit the secret key to version control
+</Warning>
+
+### Production Recommendations
+
+1. **Environment Variables**: Store sensitive settings in environment variables
+   ```python
+   SECRET_KEY = os.environ.get('DJANGO_SECRET_KEY')
+   ```
+
+2. **Debug Mode**: Set `DEBUG = False` in production (currently True in settings.py:25)
+
+3. **ALLOWED_HOSTS**: Update the allowed hosts list for your production domain
+   ```python
+   ALLOWED_HOSTS = ['yourdomain.com', 'www.yourdomain.com']
+   ```
+
+4. **HTTPS**: Always use HTTPS in production and enable security headers
+
+5. **Session Security**: Consider adjusting `SESSION_COOKIE_AGE` based on your use case
+   - Current: 300 seconds (5 minutes) - very strict
+   - Consider: 1800 seconds (30 minutes) for better usability
+
+<Tip>
+For development, you can increase `SESSION_COOKIE_AGE` to avoid frequent re-authentication:
+```python
+SESSION_COOKIE_AGE = 3600  # 1 hour
+```
+</Tip>
+
+## Logout
+
+When you log out, you're automatically redirected to the home page (`LOGOUT_REDIRECT_URL = '/'`). Since the home page requires authentication, you'll immediately see the login form.
+
+### Logout Behavior
+
+- All session data is cleared
+- Authentication cookies are invalidated
+- You're redirected to the logout URL, which then redirects to login
+- Any in-progress work not saved to the database is lost
+
+<Note>
+Always save your work before logging out or letting your session expire to prevent data loss.
+</Note>

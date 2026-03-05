@@ -1,0 +1,327 @@
+---
+title: Complete Workflow Guide
+description: Learn the end-to-end workflow for managing projects, teams, and tasks in Proyecto
+---
+
+## Overview
+
+This guide walks you through the complete workflow in Proyecto, from setting up your team to generating final reports. The system is designed around a simple hierarchy: **Team Members** → **Projects** → **Tasks**.
+
+<Note>
+Proyecto follows a structured workflow where you must first add team members, then create projects with leaders and teams, and finally create and assign tasks.
+</Note>
+
+## Workflow Architecture
+
+The data model in Proyecto is based on these core entities:
+
+```python
+# CTP/models.py:15-32
+class encargado(ModeloBase):  # Team members
+    nombres = models.CharField(null=True, blank=True, max_length=100)
+
+class Proyectos(ModeloBase):  # Projects
+    nombre_proyecto = models.CharField(max_length=100)
+    lider = models.ForeignKey(encargado, on_delete=models.CASCADE, related_name='proyectos_lider')
+    encargados = models.ManyToManyField(encargado, related_name='proyectos_encargados')
+
+class Tareas(ModeloBase):  # Tasks
+    nombre_tarea = models.CharField(null=True, blank=True, max_length=100)
+    encargados = models.ForeignKey(encargado, on_delete=models.CASCADE)
+```
+
+## Complete Workflow
+
+<Steps>
+  <Step title="Add Team Members">
+    Before creating projects, you need to add team members who will work on them.
+    
+    ### Adding a Team Member
+    
+    1. Navigate to **Trabajadores** (Team Members) from the main menu
+    2. Click **Agregar** (Add) to open the form
+    3. Enter the team member's name in the `nombres` field
+    4. Submit the form
+    
+    The system validates that the name is unique:
+    
+    ```python
+    # CTP/view_trabajadores.py:24-26
+    if encargado.objects.filter(nombres=request.POST['nombres']).exists():
+        messages.error(request, 'Registro ya existe')
+        return redirect('{}?action=agregar'.format(request.path))
+    ```
+    
+    <Tip>
+    Add all team members before creating projects. This makes project setup faster since you can select from existing members.
+    </Tip>
+  </Step>
+  
+  <Step title="Create a Project">
+    Projects are the main organizational unit in Proyecto. Each project has a leader and a team.
+    
+    ### Creating a Project
+    
+    1. Navigate to **Proyectos** from the main menu
+    2. Click **Agregar** to create a new project
+    3. Enter the project name (`nombre_proyecto`)
+    4. Select a project leader (`lider`) from your team members
+    5. Select team members (`encargados`) who will work on this project
+    6. Submit the form
+    
+    The project creation process:
+    
+    ```python
+    # CTP/view_proyectos.py:23-35
+    if Proyectos.objects.filter(nombre_proyecto=request.POST['nombre_proyecto']).exists():
+        messages.error(request, 'El nombre está repetido')
+        return redirect('{}?action=agregar'.format(request.path))
+    else:
+        form = ProjectForm(request.POST)
+        if form.is_valid():
+            proyecto = Proyectos(nombre_proyecto=form.cleaned_data['nombre_proyecto'],
+                                 lider=form.cleaned_data['lider'])
+            proyecto.save()
+            encargados = form.cleaned_data['encargados']
+            proyecto.encargados.set(encargados)
+            messages.success(request, 'Proyecto Guardado Correctamente')
+    ```
+    
+    ### Project Structure
+    
+    - **Leader**: One team member who leads the project
+    - **Team**: Multiple team members who collaborate on the project
+    - **Unique Names**: Each project must have a unique name
+    
+    <Warning>
+    The project name must be unique. If you try to create a project with a duplicate name, you'll receive an error message.
+    </Warning>
+  </Step>
+  
+  <Step title="Create Tasks">
+    Once you have projects and team members, you can create tasks and assign them.
+    
+    ### Creating a Task
+    
+    1. Navigate to **Tareas** (Tasks) from the main menu
+    2. Click **Agregar** to create a new task
+    3. Enter the task name (`nombre_tarea`)
+    4. Select the team member assigned to this task (`encargados`)
+    5. Submit the form
+    
+    Task creation with validation:
+    
+    ```python
+    # CTP/view_registros.py:24-34
+    if Tareas.objects.filter(nombre_tarea=request.POST['nombre_tarea']).exists():
+        messages.error(request, 'El nombre está repetido')
+        return redirect('{}?action=agregar'.format(request.path))
+    else:
+        form = TareasForm(request.POST)
+        if form.is_valid():
+            tareas = Tareas(nombre_tarea=form.cleaned_data['nombre_tarea'],
+                           encargados=form.cleaned_data['encargados'])
+            tareas.save(request)
+            messages.success(request, 'Tarea Guardada Correctamente')
+    ```
+    
+    <Note>
+    Each task is assigned to a single team member. The `encargados` field is a ForeignKey, meaning one task = one assignee.
+    </Note>
+  </Step>
+  
+  <Step title="Track Progress">
+    Monitor your projects, tasks, and team workload from the dashboard.
+    
+    ### Dashboard Metrics
+    
+    The main menu displays key metrics:
+    
+    ```python
+    # seguridad/menu.py:8-15
+    data = {
+        'ruta': '/',
+        'empresa': 'CTP',
+        'nombre': 'Inicio',
+        'totalencarga': encargado.objects.all().count(),
+        'totalta': Tareas.objects.all().count(),
+        'totalpro': Proyectos.objects.all().count(),
+        'user': request.user
+    }
+    ```
+    
+    You can see at a glance:
+    - Total team members (`totalencarga`)
+    - Total tasks (`totalta`)
+    - Total projects (`totalpro`)
+    
+    ### Viewing Records
+    
+    - **Projects List**: Shows all active projects with their leaders and team members
+    - **Tasks List**: Shows all active tasks with assignees
+    - **Team List**: Shows all active team members
+    
+    All lists filter by `status=True` to show only active records:
+    
+    ```python
+    # CTP/view_proyectos.py:136
+    proyectos = Proyectos.objects.filter(status=True).order_by('nombre_proyecto', 'lider')
+    ```
+  </Step>
+  
+  <Step title="Generate Reports">
+    Create PDF reports for projects, tasks, or team members to share with stakeholders.
+    
+    See the [PDF Reports](/guide/pdf-reports) guide for detailed instructions on generating and customizing reports.
+    
+    Quick overview:
+    - **Project Reports**: List all projects with leaders and teams
+    - **Task Reports**: List all tasks with assignees
+    - **Team Reports**: List all team members
+  </Step>
+</Steps>
+
+## Common Workflows
+
+### Starting a New Project
+
+<Accordion title="Quick Start: New Project in 5 Minutes">
+  1. **Add team members** (if not already added)
+     - Go to Trabajadores → Agregar
+     - Add each team member's name
+  
+  2. **Create the project**
+     - Go to Proyectos → Agregar
+     - Enter project name
+     - Select leader and team members
+  
+  3. **Create initial tasks**
+     - Go to Tareas → Agregar
+     - Create tasks and assign to team members
+  
+  4. **Verify in dashboard**
+     - Return to home page
+     - Verify counts are updated
+</Accordion>
+
+### Managing Existing Records
+
+<Accordion title="Editing Records">
+  All entities (Projects, Tasks, Team Members) support editing:
+  
+  1. Navigate to the list view
+  2. Click **Editar** (Edit) for the record
+  3. Modify the fields
+  4. Submit the form
+  
+  Example edit handler:
+  ```python
+  # CTP/view_proyectos.py:39-53
+  elif action == 'editar':
+      with transaction.atomic():
+          try:
+              id = request.POST['id']
+              proyecto = Proyectos.objects.get(id=id)
+              form = ProjectForm(request.POST, instance=proyecto)
+              if form.is_valid():
+                  form.save()
+                  messages.success(request, 'Proyectos guardado exitosamente!')
+          except Exception as ex:
+              messages.error(request, ex)
+  ```
+</Accordion>
+
+<Accordion title="Deleting Records (Soft Delete)">
+  Proyecto uses soft deletes - records are marked inactive rather than permanently removed:
+  
+  ```python
+  # CTP/view_proyectos.py:55-64
+  elif action == 'eliminar':
+      with transaction.atomic():
+          try:
+              id = request.POST['id']
+              proyectos = Proyectos.objects.get(id=id)
+              proyectos.status = False
+              proyectos.save()
+              messages.success(request, 'Proyectos eliminado')
+          except Exception as ex:
+              messages.error(request, ex)
+  ```
+  
+  When you delete a record:
+  - The `status` field is set to `False`
+  - The record is hidden from lists
+  - Data is preserved in the database
+  - You can reactivate it by setting `status=True` directly in the database
+</Accordion>
+
+## Best Practices
+
+### Project Organization
+
+<Tip>
+**Use descriptive project names**: Include project code or client name for easy identification.
+
+Good examples:
+- "PROJ-2024-001 Website Redesign"
+- "ClientX Mobile App Development"
+- "Internal Tools Migration Q1 2024"
+</Tip>
+
+### Team Assignment
+
+- **Select the right leader**: Choose someone who will coordinate the project
+- **Add relevant team members**: Only include members who will actively work on the project
+- **Review team composition**: You can edit projects later to adjust the team
+
+### Task Management
+
+- **Break down work**: Create specific, actionable tasks rather than broad objectives
+- **One assignee per task**: Each task should have clear ownership
+- **Use consistent naming**: Establish a naming convention for tasks
+
+### Data Integrity
+
+<Warning>
+All operations use Django's `transaction.atomic()` to ensure data consistency. If an error occurs during save, the entire transaction is rolled back.
+</Warning>
+
+```python
+# Example transaction usage
+with transaction.atomic():
+    try:
+        # Database operations here
+        form.save()
+        messages.success(request, 'Saved successfully')
+    except Exception as ex:
+        # Transaction automatically rolled back
+        messages.error(request, ex)
+```
+
+## ModeloBase and Tracking
+
+All entities inherit from `ModeloBase`, which automatically tracks:
+
+```python
+# CTP/models.py:4-12
+class ModeloBase(models.Model):
+    fecha_registro = models.DateField(verbose_name="Fecha Registro", auto_now_add=True)
+    hora_registro = models.TimeField(verbose_name="Hora Registro", auto_now_add=True)
+    status = models.BooleanField(default=True)
+```
+
+- **fecha_registro**: Date the record was created
+- **hora_registro**: Time the record was created
+- **status**: Whether the record is active (True) or deleted (False)
+
+<Note>
+You cannot manually set registration date/time - they're automatically set on creation using `auto_now_add=True`.
+</Note>
+
+## Next Steps
+
+Now that you understand the workflow, explore:
+
+- [PDF Reports](/guide/pdf-reports) - Learn how to generate comprehensive reports
+- [Authentication](/guide/authentication) - Understand security and session management
+- [Data Models](/api/models/projects) - Explore the technical details of models and database structure

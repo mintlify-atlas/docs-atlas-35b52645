@@ -1,0 +1,334 @@
+---
+title: 'Task Management'
+description: 'Create and track tasks with team member assignments'
+icon: 'list-check'
+---
+
+## Overview
+
+The task management system allows you to create, assign, and track individual tasks (tareas) within your organization. Each task is assigned to a specific team member and includes automatic timestamp tracking and soft-delete capabilities.
+
+<Note>
+Tasks are designed for individual assignments. Each task is assigned to one team member (encargado) who is responsible for completing it.
+</Note>
+
+## Creating Tasks
+
+Creating a task involves defining two core elements:
+
+<CardGroup cols={2}>
+  <Card title="Task Name" icon="pencil">
+    A descriptive name that identifies what needs to be done
+  </Card>
+  <Card title="Assigned Member" icon="user-check">
+    The team member responsible for completing the task
+  </Card>
+</CardGroup>
+
+### Task Creation Workflow
+
+1. Navigate to the Tasks section (`/Tareas/`)
+2. Click to add a new task
+3. Complete the task form:
+   - **Task Name** (`nombre_tarea`) - Must be unique
+   - **Assigned Member** (`encargados`) - Select the responsible team member
+4. Submit the form to create the task
+
+<Warning>
+Task names must be unique. If you attempt to create a task with a duplicate name, you'll receive an error: "El nombre está repetido" (The name is repeated).
+</Warning>
+
+## Task Data Model
+
+The `Tareas` model in `CTP/models.py` defines the task structure:
+
+```python
+class Tareas(ModeloBase):
+    nombre_tarea = models.CharField(null=True, blank=True, max_length=100)
+    encargados = models.ForeignKey(encargado, on_delete=models.CASCADE)
+    # Inherited from ModeloBase:
+    # - fecha_registro (auto-generated registration date)
+    # - hora_registro (auto-generated registration time)
+    # - status (boolean for soft deletes)
+```
+
+### Understanding Task Assignment
+
+**Single Member Assignment (ForeignKey)**
+
+Tasks use a `ForeignKey` relationship to the `encargado` model:
+- Each task is assigned to exactly **one team member**
+- This creates clear accountability for task completion
+- If the assigned team member is deleted, the task is also deleted (CASCADE)
+- One team member can have multiple tasks assigned to them
+
+<Tip>
+The field is named `encargados` (plural) but it's actually a ForeignKey that assigns to a single team member. This naming reflects that team members can be assigned to multiple tasks.
+</Tip>
+
+### Automatic Timestamps
+
+Every task automatically tracks:
+- **Registration Date** (`fecha_registro`) - The day the task was created
+- **Registration Time** (`hora_registro`) - The exact time the task was created
+- **Status** (`status`) - Boolean indicating if the task is active or deleted
+
+These fields are inherited from `ModeloBase` and set automatically when you create a task.
+
+## Editing and Managing Tasks
+
+You can modify existing tasks after creation:
+
+### Edit Workflow
+
+1. From the task listing, select the edit action for a task
+2. The system loads the current task data
+3. Modify the task:
+   - Change the task name
+   - Reassign to a different team member
+4. Save your changes
+
+```python
+# From view_registros.py - Task edit implementation
+if action == 'editar':
+    with transaction.atomic():
+        id = request.POST['id']
+        tareas = Tareas.objects.get(id=id)
+        form = TareasForm(request.POST, instance=tareas)
+        if form.is_valid():
+            form.save()
+            messages.success(request, 'Tarea guardada exitosamente!')
+```
+
+<Note>
+All edit operations are wrapped in database transactions to ensure data consistency. If validation fails, no changes are saved to the database.
+</Note>
+
+## Task Form and Validation
+
+The `TareasForm` in `forms.py` provides structure and validation:
+
+```python
+class TareasForm(forms.ModelForm):
+    class Meta:
+        model = Tareas
+        fields = ['nombre_tarea', 'encargados']
+        widgets = {
+            'nombre_tarea': forms.TextInput(attrs={'class': 'form-control'}),
+            'encargados': forms.Select(attrs={'class': 'form-control'})
+        }
+        labels = {'nombre_tarea': 'nombre_tarea', 'encargados': 'lider'}
+```
+
+### Form Features
+
+- **Task Name Field** - Text input with Bootstrap styling
+- **Assigned Member Field** - Dropdown select populated with active team members
+- **Automatic Validation** - Django form validation ensures data integrity
+- **Custom Styling** - Form controls use Bootstrap CSS classes for consistent UI
+
+<Tip>
+The form label shows "lider" (leader) for the encargados field, indicating that the assigned person leads the completion of this task.
+</Tip>
+
+## Task Status Tracking
+
+Tasks maintain their active/inactive status through the inherited `status` boolean field:
+
+### Active Tasks
+- `status = True` (default when created)
+- Visible in all task listings
+- Included in PDF reports
+- Available for editing and reassignment
+
+### Inactive Tasks
+- `status = False` (after soft delete)
+- Hidden from standard listings
+- Preserved in database for audit trail
+- Can be queried by administrators if needed
+
+## Viewing Task Listings
+
+The task listing page displays all active tasks with complete details:
+
+```python
+# From view_registros.py - Task listing query
+data['listado'] = Tareas.objects.filter(status=True).order_by(
+    'nombre_tarea', 'encargados')
+```
+
+### Listing Display
+
+The task listing shows:
+- Task name
+- Assigned team member name
+- Registration date and time
+- Actions (edit, delete, view details, generate PDF)
+
+**Sorting**: Tasks are automatically sorted alphabetically by task name, then by assigned team member.
+
+<Note>
+Only active tasks (status=True) appear in the main listing. Deleted tasks are filtered out automatically.
+</Note>
+
+## Task Deletion (Soft Delete)
+
+Like projects, tasks use soft deletion to preserve data:
+
+### Soft Delete Process
+
+1. Select the delete action for a task
+2. Confirm the deletion
+3. The system sets `status = False` instead of removing the record
+4. The task disappears from all standard listings
+5. All historical data remains in the database
+
+```python
+# From view_registros.py - Soft delete implementation
+if action == 'eliminar':
+    with transaction.atomic():
+        id = request.POST['id']
+        tareas = Tareas.objects.get(id=id)
+        tareas.status = False
+        tareas.save()
+        messages.success(request, 'Tareas eliminado')
+```
+
+### Why Soft Deletion?
+
+<AccordionGroup>
+  <Accordion title="Historical Records">
+    Maintain complete task history even after deletion. This is valuable for reviewing what work was assigned and completed over time.
+  </Accordion>
+  
+  <Accordion title="Audit Compliance">
+    Combined with automatic timestamps, you have a full audit trail of task creation and deletion dates.
+  </Accordion>
+  
+  <Accordion title="Data Relationships">
+    Preserves the relationship between tasks and team members, maintaining referential integrity in your database.
+  </Accordion>
+  
+  <Accordion title="Recovery Capability">
+    Tasks can potentially be reactivated by changing status back to True if they were deleted by mistake.
+  </Accordion>
+</AccordionGroup>
+
+## Generating PDF Reports
+
+You can generate PDF reports for tasks to create printable records:
+
+### Task Listing PDF
+
+Generate a complete PDF report of all active tasks:
+
+```python
+# From view_registros.py - PDF report generation
+if action == 'pdflistado':
+    data['listado'] = Tareas.objects.filter().order_by('nombre_tarea')
+    return render(request, 'pdf/Tareas/listadoP.html', data)
+```
+
+The PDF report includes:
+- All active tasks sorted by task name
+- Task details including name and assigned member
+- Formatted for printing and distribution
+
+<Note>
+PDF generation uses Django templates (pdf/Tareas/listadoP.html) to format the report consistently with your organization's needs.
+</Note>
+
+## User Interface Workflow
+
+The task management interface follows a consistent action-based pattern:
+
+### Available Actions
+
+All task operations use URL parameters:
+- `?action=agregar` - Create a new task
+- `?action=editar&id=X` - Edit an existing task  
+- `?action=eliminar&id=X` - Delete a task (soft delete)
+- `?action=pdflistado` - Generate PDF report of all tasks
+- `?action=consultar&id=X` - View task details via AJAX
+
+### GET vs POST Operations
+
+**GET Requests** - Display forms and views:
+- Show the task creation form
+- Show the task edit form with pre-filled data
+- Display the deletion confirmation
+- Generate and display PDF reports
+- Return JSON data for AJAX queries
+
+**POST Requests** - Process form submissions:
+- Save new tasks to the database
+- Update existing tasks
+- Perform soft deletion
+- Handle form validation and error messages
+
+<Tip>
+The view uses `model_to_dict()` when loading the edit form to automatically populate all fields with current task data.
+</Tip>
+
+## AJAX Task Queries
+
+The system supports AJAX requests for dynamic task information:
+
+```python
+# From view_registros.py - AJAX query handler
+if action == 'consultar':
+    resultado = True
+    data['id'] = id = request.GET['id']
+    data['Tareas'] = tareas = Tareas.objects.get(id=id)
+    template = get_template('Tareas/listadoajax.html')
+    return JsonResponse({"result": resultado, 'data': template.render(data)})
+```
+
+This allows the interface to:
+- Load task details without page refresh
+- Display task information in modals or popups
+- Provide a more responsive user experience
+
+## Security and Authentication
+
+All task management operations require user authentication:
+
+```python
+@login_required
+def viewTareas(request):
+    # All task operations protected by login
+```
+
+### Protected Operations
+
+You must be logged in to:
+- View the task listing
+- Create new tasks
+- Edit existing tasks  
+- Delete tasks
+- Generate PDF reports
+- Query task details
+
+<Warning>
+Unauthorized users are automatically redirected to the login page. All task data is protected behind authentication.
+</Warning>
+
+## Best Practices
+
+<CardGroup cols={2}>
+  <Card title="Unique Task Names" icon="check">
+    Always use descriptive, unique names for tasks to avoid confusion and duplicate detection errors.
+  </Card>
+  
+  <Card title="Clear Assignments" icon="user-check">
+    Assign tasks to the team member who will actually complete the work for clear accountability.
+  </Card>
+  
+  <Card title="Regular Reviews" icon="rotate">
+    Review your task listings regularly to ensure assignments are current and tasks are being completed.
+  </Card>
+  
+  <Card title="PDF Archives" icon="file-pdf">
+    Generate PDF reports periodically to maintain offline records of task assignments.
+  </Card>
+</CardGroup>

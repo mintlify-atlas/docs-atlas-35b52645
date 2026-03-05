@@ -1,80 +1,539 @@
 ---
-title: "Quickstart"
-description: "Start building awesome documentation in minutes"
+title: Quick Start Guide
+description: Get up and running with Proyecto in minutes
 ---
 
-## Get started in three steps
+## Overview
 
-Get your documentation site running locally and make your first customization.
-
-### Step 1: Set up your local environment
-
-<AccordionGroup>
-  <Accordion icon="copy" title="Clone your docs locally">
-    During the onboarding process, you created a GitHub repository with your docs content if you didn't already have one. You can find a link to this repository in your [dashboard](https://dashboard.mintlify.com).
-    
-    To clone the repository locally so that you can make and preview changes to your docs, follow the [Cloning a repository](https://docs.github.com/en/repositories/creating-and-managing-repositories/cloning-a-repository) guide in the GitHub docs.
-  </Accordion>
-  <Accordion icon="rectangle-terminal" title="Start the preview server">
-    1. Install the Mintlify CLI: `npm i -g mint`
-    2. Navigate to your docs directory and run: `mint dev`
-    3. Open `http://localhost:3000` to see your docs live!
-    
-    <Tip>Your preview updates automatically as you edit files.</Tip>
-  </Accordion>
-</AccordionGroup>
-
-### Step 2: Deploy your changes
-
-<AccordionGroup>
-  <Accordion icon="github" title="Install our GitHub app">
-    Install the Mintlify GitHub app from your [dashboard](https://dashboard.mintlify.com/settings/organization/github-app).
-    
-    Our GitHub app automatically deploys your changes to your docs site, so you don't need to manage deployments yourself.
-</Accordion>
-<Accordion icon="palette" title="Update your site name and colors">
-    For a first change, let's update the name and colors of your docs site.
-
-    1. Open `docs.json` in your editor.
-    2. Change the `"name"` field to your project name.
-    3. Update the `"colors"` to match your brand.
-    4. Save and see your changes instantly at `http://localhost:3000`.
-
-    <Tip>Try changing the primary color to see an immediate difference!</Tip>
-  </Accordion>
-</AccordionGroup>
-
-### Step 3: Go live
-
-<Accordion icon="rocket" title="Publish your docs">
-  1. Commit and push your changes.
-  2. Your docs will update and be live in moments!
-</Accordion>
-
-## Next steps
-
-Now that you have your docs running, explore these key features:
-
-<CardGroup cols={2}>
-
-<Card title="Write Content" icon="pen-to-square" href="/essentials/markdown">
-  Learn MDX syntax and start writing your documentation.
-</Card>
-
-<Card title="Customize style" icon="palette" href="/essentials/settings">
-  Make your docs match your brand perfectly.
-</Card>
-
-<Card title="Add code examples" icon="square-code" href="/essentials/code">
-  Include syntax-highlighted code blocks.
-</Card>
-
-<Card title="API documentation" icon="code" href="/api-reference/introduction">
-  Auto-generate API docs from OpenAPI specs.
-</Card>
-
-</CardGroup>
+This guide will help you quickly set up and start using Proyecto. If you're new to Django or need detailed explanations, check out the full [Installation Guide](/installation).
 
 <Note>
-  **Need help?** See our [full documentation](https://mintlify.com/docs) or join our [community](https://mintlify.com/community).
+This quick start assumes you have Python 3.8+, PostgreSQL, and basic command-line knowledge.
+</Note>
+
+## Fast-Track Setup
+
+<Steps>
+  <Step title="Install and Setup">
+    Clone the repository and install dependencies:
+    
+    ```bash
+    # Clone repository
+    git clone <repository-url>
+    cd proyecto
+    
+    # Create virtual environment
+    python -m venv venv
+    source venv/bin/activate  # Windows: venv\Scripts\activate
+    
+    # Install dependencies
+    pip install -r requirements.txt
+    ```
+  </Step>
+
+  <Step title="Configure Database">
+    Create a PostgreSQL database and update settings:
+    
+    ```bash
+    # Create database
+    psql -U postgres -c "CREATE DATABASE Proyecto;"
+    ```
+    
+    Edit `proyecto/settings.py` with your database credentials:
+    
+    ```python proyecto/settings.py
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.postgresql_psycopg2',
+            'NAME': 'Proyecto',
+            'USER': 'postgres',
+            'PASSWORD': 'your_password',  # Change this
+            'HOST': 'localhost',
+            'PORT': '5432',
+            'ATOMIC_REQUESTS': True,
+        }
+    }
+    ```
+    
+    <Warning>
+    Replace `'your_password'` with your actual PostgreSQL password.
+    </Warning>
+  </Step>
+
+  <Step title="Initialize Database">
+    Run migrations and create a superuser:
+    
+    ```bash
+    # Apply migrations
+    python manage.py migrate
+    
+    # Create admin account
+    python manage.py createsuperuser
+    ```
+    
+    Follow the prompts to set up your admin username and password.
+  </Step>
+
+  <Step title="Start Development Server">
+    Launch the development server:
+    
+    ```bash
+    python manage.py runserver
+    ```
+    
+    Open your browser to `http://127.0.0.1:8000/`
+    
+    <Tip>
+    You should see the Proyecto login page. Use the superuser credentials you just created.
+    </Tip>
+  </Step>
+</Steps>
+
+## Using Proyecto
+
+Once your server is running, you can start managing projects and tasks.
+
+### Accessing the System
+
+<Steps>
+  <Step title="Login to the Application">
+    Navigate to `http://127.0.0.1:8000/` and enter your superuser credentials.
+    
+    After successful login, you'll be redirected to the main menu.
+  </Step>
+
+  <Step title="Access Admin Interface (Optional)">
+    For administrative tasks, access the Django admin at:
+    
+    ```
+    http://127.0.0.1:8000/admin/
+    ```
+    
+    Here you can manage users, groups, and permissions.
+  </Step>
+</Steps>
+
+### Creating Your First Team Member
+
+Before creating projects and tasks, you need to add team members (encargados).
+
+<Steps>
+  <Step title="Navigate to Team Members">
+    From the main menu, click on "Encargado" or navigate to:
+    
+    ```
+    http://127.0.0.1:8000/trabajadores/
+    ```
+  </Step>
+
+  <Step title="Add New Team Member">
+    Click the "Agregar" (Add) button and fill in the form:
+    
+    ```python
+    # Form fields based on trabajadoresForm
+    nombres: "John Doe"  # Team member name
+    ```
+    
+    The system automatically tracks:
+    - Registration date (`fecha_registro`)
+    - Registration time (`hora_registro`)
+    - Active status (`status`)
+  </Step>
+
+  <Step title="Verify Creation">
+    After saving, you'll see the new team member in the list. The system validates against duplicate names.
+    
+    <Note>
+    All team members are stored in the `encargado` model with automatic timestamps.
+    </Note>
+  </Step>
+</Steps>
+
+### Creating Your First Project
+
+With team members added, you can now create projects.
+
+<Steps>
+  <Step title="Navigate to Projects">
+    From the main menu, access the Projects section:
+    
+    ```
+    http://127.0.0.1:8000/Proyectos/
+    ```
+  </Step>
+
+  <Step title="Create New Project">
+    Click "Agregar" and fill in the project form:
+    
+    ```python
+    # Based on ProjectForm fields
+    nombre_proyecto: "Website Redesign"     # Project name
+    lider: "John Doe"                       # Project leader (ForeignKey)
+    encargados: ["John Doe", "Jane Smith"]  # Team members (ManyToMany)
+    ```
+    
+    <CodeGroup>
+    ```python Model Structure
+    class Proyectos(ModeloBase):
+        nombre_proyecto = models.CharField(max_length=100)
+        lider = models.ForeignKey(encargado, on_delete=models.CASCADE,
+                                 related_name='proyectos_lider')
+        encargados = models.ManyToManyField(encargado,
+                                           related_name='proyectos_encargados')
+    ```
+    
+    ```python View Logic
+    @login_required
+    def viewProyectos(request):
+        if request.method == 'POST':
+            form = ProjectForm(request.POST)
+            if form.is_valid():
+                proyecto = Proyectos(
+                    nombre_proyecto=form.cleaned_data['nombre_proyecto'],
+                    lider=form.cleaned_data['lider']
+                )
+                proyecto.save()
+                proyecto.encargados.set(form.cleaned_data['encargados'])
+    ```
+    </CodeGroup>
+  </Step>
+
+  <Step title="View Project Details">
+    After creation, your project appears in the list with:
+    - Project name
+    - Leader name
+    - Assigned team members
+    - Automatic registration timestamp
+    
+    <Tip>
+    Click "Consultar" to view detailed project information via AJAX.
+    </Tip>
+  </Step>
+</Steps>
+
+### Creating Your First Task
+
+Tasks are assigned to individual team members.
+
+<Steps>
+  <Step title="Navigate to Tasks">
+    Access the Tasks section:
+    
+    ```
+    http://127.0.0.1:8000/Tareas/
+    ```
+  </Step>
+
+  <Step title="Add New Task">
+    Click "Agregar" and complete the task form:
+    
+    ```python
+    # Based on TareasForm fields
+    nombre_tarea: "Design homepage mockup"  # Task name
+    encargados: "John Doe"                  # Assigned team member
+    ```
+    
+    The task model structure:
+    
+    ```python CTP/models.py
+    class Tareas(ModeloBase):
+        nombre_tarea = models.CharField(max_length=100)
+        encargados = models.ForeignKey(encargado, on_delete=models.CASCADE)
+    ```
+  </Step>
+
+  <Step title="Manage Tasks">
+    From the task list, you can:
+    - **View**: See all active tasks
+    - **Edit**: Modify task details
+    - **Delete**: Soft-delete tasks (sets `status=False`)
+    - **Export**: Generate PDF reports
+    
+    <Note>
+    Tasks use soft deletion - they're marked as inactive rather than permanently removed.
+    </Note>
+  </Step>
+</Steps>
+
+## Key Features in Action
+
+### Transaction Safety
+
+All create, update, and delete operations use Django's atomic transactions:
+
+```python CTP/view_proyectos.py
+from django.db import transaction
+
+@login_required
+def viewProyectos(request):
+    if action == 'agregar':
+        with transaction.atomic():
+            try:
+                # Validate unique name
+                if Proyectos.objects.filter(
+                    nombre_proyecto=request.POST['nombre_proyecto']
+                ).exists():
+                    messages.error(request, 'El nombre está repetido')
+                    return redirect('{}?action=agregar'.format(request.path))
+                
+                # Create project
+                form = ProjectForm(request.POST)
+                if form.is_valid():
+                    proyecto = form.save()
+                    messages.success(request, 'Proyecto Guardado Correctamente')
+            except Exception as ex:
+                messages.error(request, ex)
+```
+
+<Tip>
+Atomic transactions ensure data consistency - either all changes succeed or none are applied.
+</Tip>
+
+### PDF Report Generation
+
+Generate PDF reports for projects, tasks, and team members:
+
+<CodeGroup>
+```python Project PDF
+# URL: /Proyectos/?action=pdflistado
+if action == 'pdflistado':
+    proyectos = Proyectos.objects.filter(status=True).order_by(
+        'nombre_proyecto', 'lider'
+    )
+    data['listado'] = []
+    for proyecto in proyectos:
+        encargados = [e.nombres for e in proyecto.encargados.all()]
+        data['listado'].append({
+            'nombre_proyecto': proyecto.nombre_proyecto,
+            'lider': proyecto.lider.nombres,
+            'encargados': encargados
+        })
+    return render(request, 'pdf/Proyectos/listadoP.html', data)
+```
+
+```python Task PDF
+# URL: /Tareas/?action=pdflistado
+if action == 'pdflistado':
+    data['listado'] = Tareas.objects.filter().order_by('nombre_tarea')
+    return render(request, 'pdf/Tareas/listadoP.html', data)
+```
+</CodeGroup>
+
+### Authentication & Security
+
+All main views require authentication:
+
+```python
+from django.contrib.auth.decorators import login_required
+
+@login_required
+def viewProyectos(request):
+    # Only authenticated users can access
+    pass
+
+@login_required
+def viewTareas(request):
+    # Protected view
+    pass
+```
+
+<Warning>
+Session timeout is set to 5 minutes by default. Adjust `SESSION_COOKIE_AGE` in settings.py for different durations.
+</Warning>
+
+## URL Structure
+
+Proyecto uses the following URL patterns:
+
+```python CTP/urls.py
+urlpatterns = [
+    re_path(r'^$', menuinicial, name='inicio'),
+    re_path(r'Tareas/', viewTareas, name='Tareas'),
+    re_path(r'trabajadores/', viewtrabajadores, name='trabajadores'),
+    re_path(r'Proyectos/', viewProyectos, name='Proyectos'),
+    re_path(r'registration/', crear_superusuario, name='crear_superusuario'),
+]
+```
+
+### Common URL Patterns
+
+<AccordionGroup>
+  <Accordion title="Projects">
+    - List: `/Proyectos/`
+    - Add: `/Proyectos/?action=agregar`
+    - Edit: `/Proyectos/?action=editar&id=1`
+    - Delete: `/Proyectos/?action=eliminar&id=1`
+    - PDF: `/Proyectos/?action=pdflistado`
+  </Accordion>
+
+  <Accordion title="Tasks">
+    - List: `/Tareas/`
+    - Add: `/Tareas/?action=agregar`
+    - Edit: `/Tareas/?action=editar&id=1`
+    - Delete: `/Tareas/?action=eliminar&id=1`
+    - PDF: `/Tareas/?action=pdflistado`
+  </Accordion>
+
+  <Accordion title="Team Members">
+    - List: `/trabajadores/`
+    - Add: `/trabajadores/?action=agregar`
+    - Edit: `/trabajadores/?action=editar&id=1`
+    - Delete: `/trabajadores/?action=eliminar&id=1`
+    - PDF: `/trabajadores/?action=pdflistado`
+  </Accordion>
+</AccordionGroup>
+
+## Configuration Tips
+
+### Development vs Production
+
+<CodeGroup>
+```python Development
+# proyecto/settings.py
+DEBUG = True
+ALLOWED_HOSTS = ['127.0.0.1', 'localhost']
+
+# Use during development for detailed error pages
+```
+
+```python Production
+# proyecto/settings.py
+DEBUG = False
+ALLOWED_HOSTS = ['yourdomain.com', 'www.yourdomain.com']
+
+# Generate new secret key
+SECRET_KEY = 'your-new-secret-key-here'
+
+# Run collectstatic
+python manage.py collectstatic
+```
+</CodeGroup>
+
+### Database Connection
+
+The database configuration supports atomic requests for data integrity:
+
+```python proyecto/settings.py
+DATABASES = {
+    'default': {
+        'ENGINE': 'django.db.backends.postgresql_psycopg2',
+        'NAME': 'Proyecto',
+        'USER': 'postgres',
+        'PASSWORD': 'your_password',
+        'HOST': 'localhost',
+        'PORT': '5432',
+        'ATOMIC_REQUESTS': True,  # Ensures transaction safety
+    }
+}
+```
+
+<Tip>
+`ATOMIC_REQUESTS=True` wraps each view in a database transaction, ensuring data consistency.
+</Tip>
+
+## Common Operations
+
+### Managing Data
+
+<CodeGroup>
+```bash Create Backup
+# Backup database
+pg_dump -U postgres Proyecto > backup.sql
+
+# Restore database
+psql -U postgres Proyecto < backup.sql
+```
+
+```bash Django Shell
+# Access Django shell for direct model interaction
+python manage.py shell
+
+# Example operations
+from CTP.models import Proyectos, Tareas, encargado
+
+# Query all active projects
+proyectos = Proyectos.objects.filter(status=True)
+
+# Get project with team members
+proyecto = Proyectos.objects.get(id=1)
+team = proyecto.encargados.all()
+```
+
+```bash View Logs
+# Run with verbose output
+python manage.py runserver --verbosity 2
+
+# Check for issues
+python manage.py check
+```
+</CodeGroup>
+
+## Next Steps
+
+Now that you have Proyecto running:
+
+<CardGroup cols={2}>
+  <Card title="Explore Data Models" icon="code" href="/api/models/projects">
+    Learn about the database models and structure
+  </Card>
+  
+  <Card title="Core Features" icon="palette" href="/features/projects">
+    Explore project management features
+  </Card>
+  
+  <Card title="Deploy to Production" icon="server" href="/deployment/production">
+    Deploy Proyecto to a production environment
+  </Card>
+  
+  <Card title="View Workflow Guide" icon="puzzle-piece" href="/guide/workflow">
+    Learn the complete project management workflow
+  </Card>
+</CardGroup>
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="Server won't start">
+    Check that:
+    - Virtual environment is activated
+    - All dependencies are installed
+    - Database is running and accessible
+    - Port 8000 is not in use
+    
+    ```bash
+    # Check port usage
+    lsof -i :8000  # macOS/Linux
+    netstat -ano | findstr :8000  # Windows
+    ```
+  </Accordion>
+
+  <Accordion title="Can't login">
+    Verify superuser was created:
+    
+    ```bash
+    python manage.py createsuperuser
+    ```
+    
+    Reset password if needed:
+    
+    ```bash
+    python manage.py changepassword <username>
+    ```
+  </Accordion>
+
+  <Accordion title="Database errors">
+    Ensure PostgreSQL is running and credentials are correct:
+    
+    ```bash
+    # Test connection
+    psql -U postgres -d Proyecto
+    
+    # Verify migrations
+    python manage.py showmigrations
+    ```
+  </Accordion>
+</AccordionGroup>
+
+<Note>
+For more detailed help, see the [Installation Guide](/installation) or check the development documentation.
 </Note>

@@ -1,0 +1,191 @@
+---
+title: 'Tareas Model'
+description: 'API reference for the Tareas (Tasks) data model'
+---
+
+## Overview
+
+The `Tareas` model represents tasks in the system. Each task has a name and is assigned to a single team member. This model inherits from `ModeloBase`, which provides automatic timestamping and soft delete functionality.
+
+## Model Definition
+
+```python
+class Tareas(ModeloBase):
+    nombre_tarea = models.CharField(null=True, blank=True, max_length=100)
+    encargados = models.ForeignKey(encargado, on_delete=models.CASCADE)
+    
+    def __str__(self):
+        return self.nombre_tarea
+```
+
+## Fields
+
+### Direct Fields
+
+<ParamField path="nombre_tarea" type="CharField">
+  The name or title of the task.
+  
+  **Constraints:**
+  - Maximum length: 100 characters
+  - Optional: `null=True, blank=True` - can be empty or null
+</ParamField>
+
+<ParamField path="encargados" type="ForeignKey" required>
+  Reference to the team member assigned to this task.
+  
+  **Relationship Details:**
+  - References: `encargado` model
+  - On Delete: `CASCADE` - deleting the team member will delete the task
+  - Required field (must be assigned to someone)
+  
+  <Note>
+    Despite the plural name "encargados", this is a `ForeignKey` (one-to-one relationship), not a `ManyToManyField`. Each task is assigned to exactly one team member.
+  </Note>
+</ParamField>
+
+### Inherited Fields (from ModeloBase)
+
+<ParamField path="fecha_registro" type="DateField" readonly>
+  The date when the task was created.
+  
+  **Constraints:**
+  - Automatically set on creation (`auto_now_add=True`)
+  - Read-only after creation
+  - Verbose name: "Fecha Registro"
+</ParamField>
+
+<ParamField path="hora_registro" type="TimeField" readonly>
+  The time when the task was created.
+  
+  **Constraints:**
+  - Automatically set on creation (`auto_now_add=True`)
+  - Read-only after creation
+  - Verbose name: "Hora Registro"
+</ParamField>
+
+<ParamField path="status" type="BooleanField" default="True">
+  Indicates whether the task is active or deleted (soft delete).
+  
+  **Constraints:**
+  - Default value: `True` (active)
+  - Set to `False` for soft deletion
+</ParamField>
+
+## Model Relationships
+
+### Forward Relationships
+
+<ResponseField name="encargados" type="encargado">
+  Access the team member assigned to this task:
+  ```python
+  tarea = Tareas.objects.get(id=1)
+  assigned_member = tarea.encargados
+  print(assigned_member.nombres)
+  ```
+</ResponseField>
+
+### Reverse Relationships
+
+<ResponseField name="tareas_set" type="QuerySet[Tareas]">
+  From an `encargado` instance, access all tasks assigned to them:
+  ```python
+  member = encargado.objects.get(id=1)
+  tasks = member.tareas_set.all()
+  for task in tasks:
+      print(task.nombre_tarea)
+  ```
+  
+  <Note>
+    Since no `related_name` was specified, Django uses the default reverse relationship name: `tareas_set`
+  </Note>
+</ResponseField>
+
+## String Representation
+
+The model's `__str__()` method returns the task name:
+
+```python
+def __str__(self):
+    return self.nombre_tarea
+```
+
+<Warning>
+  Since `nombre_tarea` can be `None`, the string representation may return `None` for tasks without names.
+</Warning>
+
+## Usage Examples
+
+### Creating a Task
+
+```python
+from CTP.models import Tareas, encargado
+
+# Get a team member to assign the task to
+member = encargado.objects.get(id=1)
+
+# Create a new task
+tarea = Tareas.objects.create(
+    nombre_tarea="Implement user authentication",
+    encargados=member
+)
+```
+
+### Querying Tasks
+
+```python
+# Get all active tasks
+active_tasks = Tareas.objects.filter(status=True)
+
+# Get tasks assigned to a specific team member
+member = encargado.objects.get(id=1)
+assigned_tasks = Tareas.objects.filter(encargados=member)
+# Or using reverse relationship
+assigned_tasks = member.tareas_set.all()
+
+# Get tasks with names (excluding null/empty names)
+named_tasks = Tareas.objects.exclude(nombre_tarea__isnull=True).exclude(nombre_tarea='')
+```
+
+### Updating a Task
+
+```python
+tarea = Tareas.objects.get(id=1)
+
+# Update the task name
+tarea.nombre_tarea = "Updated task description"
+tarea.save()
+
+# Reassign to a different team member
+new_member = encargado.objects.get(id=2)
+tarea.encargados = new_member
+tarea.save()
+```
+
+### Soft Deleting a Task
+
+```python
+tarea = Tareas.objects.get(id=1)
+tarea.status = False
+tarea.save()
+
+# Query only active tasks
+active_tasks = Tareas.objects.filter(status=True)
+```
+
+<Warning>
+  Deleting an `encargado` will cascade delete all tasks assigned to them. Consider reassigning tasks before deleting a team member, or use soft delete.
+</Warning>
+
+## Database Table
+
+This model is stored in the database table: `CTP_tareas`
+
+## Design Considerations
+
+<Note>
+  **Field Naming:** The field `encargados` (plural) suggests multiple assignees, but it's actually a `ForeignKey` that only allows one assignee per task. Consider this when working with the model.
+</Note>
+
+<Note>
+  **Optional Task Names:** Tasks can be created without a name (`null=True, blank=True`). Your application logic should handle cases where `nombre_tarea` is `None`.
+</Note>

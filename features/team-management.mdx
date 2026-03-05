@@ -1,0 +1,397 @@
+---
+title: 'Team Management'
+description: 'Manage team members who can be assigned to projects and tasks'
+icon: 'users'
+---
+
+## Overview
+
+The team management system allows you to create and maintain a roster of team members (encargados) who can be assigned to projects and tasks. Each team member record includes automatic timestamp tracking and soft-delete functionality to preserve historical data.
+
+<Note>
+Team members (encargados) are the foundation of the project management system. You must create team members before you can assign them to projects or tasks.
+</Note>
+
+## Understanding Team Members (Encargados)
+
+The term **"encargado"** means "person in charge" or "responsible person" in Spanish. In Proyecto, encargados are:
+
+<CardGroup cols={2}>
+  <Card title="Project Leaders" icon="user-tie">
+    Can be assigned as leaders of projects with overall responsibility
+  </Card>
+  <Card title="Project Team Members" icon="users">
+    Can be assigned to multiple projects as contributing team members
+  </Card>
+  <Card title="Task Assignees" icon="list-check">
+    Can be assigned individual tasks to complete
+  </Card>
+  <Card title="Organizational Resources" icon="building">
+    Represent the human resources available in your organization
+  </Card>
+</CardGroup>
+
+## The Encargado Data Model
+
+The `encargado` model in `CTP/models.py` defines the team member structure:
+
+```python
+class encargado(ModeloBase):
+    nombres = models.CharField(null=True, blank=True, max_length=100)
+    # Inherited from ModeloBase:
+    # - fecha_registro (auto-generated registration date)
+    # - hora_registro (auto-generated registration time)
+    # - status (boolean for soft deletes)
+    
+    def __str__(self):
+        return self.nombres
+```
+
+### Model Fields
+
+**nombres** (Names)
+- Type: Character field (max 100 characters)
+- Nullable: Yes (can be blank)
+- Purpose: Stores the team member's full name
+- Used as the string representation (`__str__`) of the team member
+
+**Inherited Fields**
+- `fecha_registro` - Automatically set to the date when the team member was added
+- `hora_registro` - Automatically set to the time when the team member was added
+- `status` - Boolean flag (True = active, False = deleted)
+
+<Tip>
+The `__str__` method returns the team member's name, which is what you'll see in dropdown lists when assigning projects and tasks.
+</Tip>
+
+## Adding Team Members
+
+Creating new team members is straightforward:
+
+### Creation Workflow
+
+1. Navigate to the Team Members section (`/trabajadores/`)
+2. Click to add a new team member
+3. Enter the team member's full name in the **nombres** field
+4. Submit the form
+
+```python
+# From view_trabajadores.py - Team member creation
+if action == 'agregar':
+    with transaction.atomic():
+        if encargado.objects.filter(nombres=request.POST['nombres']).exists():
+            messages.error(request, 'Registro ya existe')
+            return redirect('{}?action=agregar'.format(request.path))
+        else:
+            form = trabajadoresForm(request.POST)
+            if form.is_valid():
+                Encargado = encargado(nombres=form.cleaned_data['nombres'])
+                Encargado.save(request)
+                messages.success(request, 'Registro Guardado Correctamente')
+```
+
+<Warning>
+Team member names must be unique. If you try to add a team member with a name that already exists, you'll receive an error: "Registro ya existe" (Record already exists).
+</Warning>
+
+## Team Member Form
+
+The `trabajadoresForm` in `forms.py` provides a simple interface:
+
+```python
+class trabajadoresForm(forms.ModelForm):
+    class Meta:
+        model = encargado
+        fields = ['nombres']
+        widgets = {
+            'nombres': forms.TextInput(attrs={
+                'class': 'form-control',
+                "placeholder": 'Ingresa el nombre'
+            })
+        }
+        labels = {'nombres': 'nombres'}
+```
+
+### Form Features
+
+- **Single Field** - Only requires the team member's name
+- **Bootstrap Styling** - Uses form-control class for consistent UI
+- **Helpful Placeholder** - "Ingresa el nombre" (Enter the name) guides users
+- **Django Validation** - Automatic validation ensures data integrity
+
+<Tip>
+Keep team member names clear and complete (e.g., "Juan Pérez" rather than just "Juan") to avoid confusion when multiple people have similar names.
+</Tip>
+
+## Managing Team Member Profiles
+
+Once created, you can edit team member information:
+
+### Edit Workflow
+
+1. From the team member listing, click edit for a team member
+2. The form loads with the current name pre-filled
+3. Modify the name if needed
+4. Save the changes
+
+```python
+# From view_trabajadores.py - Edit implementation
+if action == 'editar':
+    with transaction.atomic():
+        id = request.POST['id']
+        Encargado = encargado.objects.get(id=id)
+        form = trabajadoresForm(request.POST, instance=Encargado)
+        if form.is_valid():
+            form.save()
+            messages.success(request, 'El registro se editó correctamente')
+        else:
+            messages.error(request, 'error')
+```
+
+<Note>
+Editing a team member's name automatically updates it everywhere they're assigned - in project leadership, project teams, and task assignments.
+</Note>
+
+## Assigning Members to Projects and Tasks
+
+Once team members are created, they become available for assignment:
+
+### Project Leadership Assignment
+
+Each project requires one leader:
+- Uses a `ForeignKey` relationship in the Proyectos model
+- Select from dropdown: `lider = models.ForeignKey(encargado, on_delete=models.CASCADE, related_name='proyectos_lider')`
+- One team member can lead multiple projects
+
+### Project Team Assignment
+
+Projects can have multiple team members:
+- Uses a `ManyToManyField` relationship in the Proyectos model
+- Multi-select interface: `encargados = models.ManyToManyField(encargado, related_name='proyectos_encargados')`
+- One team member can be on multiple project teams
+- Project leader can also be included in the team members list
+
+### Task Assignment
+
+Each task is assigned to one team member:
+- Uses a `ForeignKey` relationship in the Tareas model
+- Select from dropdown: `encargados = models.ForeignKey(encargado, on_delete=models.CASCADE)`
+- One team member can have multiple tasks assigned
+
+<AccordionGroup>
+  <Accordion title="Viewing Team Member Assignments">
+    To see all projects led by a team member, use the reverse relationship: `team_member.proyectos_lider.all()`
+    
+    To see all projects where they're a team member: `team_member.proyectos_encargados.all()`
+    
+    To see all their assigned tasks: `team_member.tareas_set.all()`
+  </Accordion>
+  
+  <Accordion title="Cascade Delete Protection">
+    The CASCADE setting means if you delete a team member, all their associated records are also deleted:
+    - Projects they lead
+    - Their project team memberships
+    - Tasks assigned to them
+    
+    This is why the system uses soft deletes to prevent accidental data loss.
+  </Accordion>
+</AccordionGroup>
+
+## Viewing Team Member Listings
+
+The team member listing displays all active members:
+
+```python
+# From view_trabajadores.py - Team listing query
+data['listado'] = encargado.objects.filter(status=True)
+```
+
+### Listing Display
+
+The listing shows:
+- Team member names
+- Registration date and time
+- Available actions (edit, delete, view details, generate PDF)
+
+<Note>
+Only active team members (status=True) appear in the listing and are available for assignment to projects and tasks.
+</Note>
+
+## Soft Delete Functionality
+
+Team members use soft deletion to maintain data integrity:
+
+### Soft Delete Process
+
+1. Select the delete action for a team member
+2. Confirm the deletion
+3. The system sets `status = False` instead of removing the record
+4. The team member is hidden from listings and assignment dropdowns
+5. All historical data and relationships are preserved
+
+```python
+# From view_trabajadores.py - Soft delete implementation
+if action == 'eliminar':
+    with transaction.atomic():
+        id = request.POST['id']
+        Encargado = encargado.objects.get(id=id)
+        Encargado.status = False
+        Encargado.save()
+        messages.success(request, 'registro eliminado')
+```
+
+### Why Soft Delete for Team Members?
+
+<CardGroup cols={2}>
+  <Card title="Historical Integrity" icon="clock-rotate-left">
+    Preserves records of who led or worked on past projects and completed tasks
+  </Card>
+  
+  <Card title="Audit Trail" icon="file-lines">
+    Maintains complete history of team member involvement with timestamp data
+  </Card>
+  
+  <Card title="Prevents Data Loss" icon="shield-check">
+    Avoids cascade deletion of all projects and tasks associated with the team member
+  </Card>
+  
+  <Card title="Recovery Option" icon="rotate-left">
+    Team members can be reactivated if deleted by mistake
+  </Card>
+</CardGroup>
+
+<Warning>
+Be cautious when deleting team members who are currently assigned to active projects or tasks. While the records are preserved, they won't appear in current listings.
+</Warning>
+
+## PDF Report Generation
+
+Generate PDF reports of your team roster:
+
+### Team Listing PDF
+
+```python
+# From view_trabajadores.py - PDF generation
+if action == 'pdflistado':
+    data['listado'] = encargado.objects.filter(status=True).order_by('nombres')
+    return render(request, 'pdf/trabajadores/listadoM.html', data)
+```
+
+The PDF report includes:
+- All active team members
+- Sorted alphabetically by name
+- Registration information
+- Formatted for printing and distribution
+
+<Tip>
+Generate team member PDF reports periodically to maintain offline records of your organizational roster.
+</Tip>
+
+## User Interface Workflow
+
+The team management interface uses action-based navigation:
+
+### Available Actions
+
+- `?action=agregar` - Add a new team member
+- `?action=editar&id=X` - Edit an existing team member
+- `?action=eliminar&id=X` - Delete a team member (soft delete)
+- `?action=pdflistado` - Generate PDF report of all team members
+- `?action=consultar&id=X` - Query team member details via AJAX
+
+### AJAX Queries
+
+The system supports dynamic loading of team member information:
+
+```python
+# From view_trabajadores.py - AJAX query handler
+if action == 'consultar':
+    resultado = True
+    data['id'] = id = request.GET['id']
+    data['encargado'] = Encargado = encargado.objects.get(id=id)
+    template = get_template('trabajadores/listadoajax.html')
+    return JsonResponse({"result": resultado, 'data': template.render(data)})
+```
+
+This enables:
+- Loading team member details without page refresh
+- Displaying information in modals or popups
+- More responsive user interactions
+
+## Security and Authentication
+
+All team management operations require authentication:
+
+```python
+@login_required
+def viewtrabajadores(request):
+    # All team member operations protected by login
+```
+
+### Protected Operations
+
+You must be logged in to:
+- View the team member listing
+- Add new team members
+- Edit team member profiles
+- Delete team members
+- Generate PDF reports
+- Query team member details
+
+<Warning>
+Unauthorized access attempts are redirected to the login page. All team member data is protected.
+</Warning>
+
+## Best Practices
+
+### Naming Conventions
+
+<Tip>
+Use full, formal names for team members (e.g., "María García López" instead of "Mari") to:
+- Avoid confusion with similar names
+- Maintain professionalism in reports
+- Ensure clear identification in assignments
+- Prevent duplicate detection issues
+</Tip>
+
+### Team Member Management
+
+1. **Create Before Assigning** - Add all team members to the system before creating projects or tasks
+2. **Regular Updates** - Keep team member information current as your organization changes
+3. **Careful Deletion** - Review assignments before deleting team members to avoid losing context
+4. **Consistent Naming** - Establish a naming standard (First Last, or Last, First) and stick to it
+
+### Integration with Projects and Tasks
+
+<CardGroup cols={3}>
+  <Card title="Pre-populate Team" icon="users-plus">
+    Add all team members first, then create projects and tasks
+  </Card>
+  
+  <Card title="Clear Roles" icon="user-tag">
+    Use team member names that clearly identify who they are
+  </Card>
+  
+  <Card title="Active Management" icon="refresh">
+    Regularly review and update your team roster as people join or leave
+  </Card>
+</CardGroup>
+
+## Transaction Safety
+
+All team member operations use database transactions:
+
+```python
+with transaction.atomic():
+    # All database operations
+```
+
+This ensures:
+- **Data Consistency** - All changes succeed or all fail together
+- **No Partial Updates** - You never end up with incomplete records
+- **Error Recovery** - Failed operations are automatically rolled back
+- **Database Integrity** - Relationships remain valid even if errors occur
+
+<Note>
+Transaction wrapping is especially important for team members because they're referenced by projects and tasks through foreign key relationships.
+</Note>

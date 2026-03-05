@@ -1,0 +1,418 @@
+---
+title: 'Team Views'
+description: 'API reference for team member (encargado) management view functions'
+---
+
+## Overview
+
+The `viewtrabajadores` function is a Django view that handles all team member (encargado/trabajadores) operations including creating, editing, deleting, and listing team members. This view is protected by the `@login_required` decorator and supports both GET and POST requests with action-based routing.
+
+**Location:** `CTP/view_trabajadores.py:13`
+
+## Function Signature
+
+```python
+@login_required
+def viewtrabajadores(request):
+    """
+    Main view function for managing team members (encargado)
+    
+    Args:
+        request: Django HttpRequest object
+        
+    Returns:
+        HttpResponse: Rendered template or redirect/JSON response
+    """
+```
+
+## Decorator
+
+<ParamField path="@login_required" type="decorator">
+  Requires user authentication before accessing this view. Unauthenticated users are redirected to the login page.
+</ParamField>
+
+## Request Parameters
+
+### Context Data
+
+The view initializes a context dictionary with default values:
+
+<ParamField path="empresa" type="string" default="Michael">
+  Company/organization name displayed in templates
+</ParamField>
+
+<ParamField path="nombre" type="string" default="Encargado">
+  Display name for the current section
+</ParamField>
+
+<ParamField path="ruta" type="string" default="/trabajadores/">
+  Base URL path for team member operations
+</ParamField>
+
+### Action Parameters
+
+<ParamField path="action" type="string" required>
+  Specifies the operation to perform. Supported values:
+  - `agregar` - Add new team member
+  - `editar` - Edit existing team member
+  - `eliminar` - Delete team member (soft delete)
+  - `pdflistado` - Generate PDF listing
+  - `consultar` - Query team member details (AJAX)
+</ParamField>
+
+<ParamField path="id" type="integer">
+  Team member ID for edit, delete, and consultar actions
+</ParamField>
+
+## Actions
+
+### agregar (Add Team Member)
+
+Creates a new team member with transaction management and duplicate validation.
+
+**GET Request:**
+```python
+# view_trabajadores.py:78-81
+if action == 'agregar':
+    form = trabajadoresForm()
+    data['formulario'] = form
+    return render(request, 'trabajadores/formulario.html', data)
+```
+
+**POST Request:**
+```python
+# view_trabajadores.py:21-35
+if action == 'agregar':
+    with transaction.atomic():
+        try:
+            if encargado.objects.filter(nombres=request.POST['nombres']).exists():
+                messages.error(request, 'Registro ya existe')
+                return redirect('{}?action=agregar'.format(request.path))
+            else:
+                form = trabajadoresForm(request.POST)
+                if form.is_valid():
+                    Encargado = encargado(nombres=form.cleaned_data['nombres'])
+                    Encargado.save(request)
+                    messages.success(request, 'Registro Guardado Correctamente')
+        except Exception as ex:
+            messages.error(request, ex)
+```
+
+<Note>
+  **Duplicate Prevention:** The view checks if a team member with the same `nombres` already exists before creating a new record to prevent duplicates.
+</Note>
+
+**Response Fields:**
+
+<ResponseField name="formulario" type="trabajadoresForm">
+  Form instance for rendering in template (GET)
+</ResponseField>
+
+<ResponseField name="messages" type="Message[]">
+  Success or error messages added to Django message framework
+</ResponseField>
+
+### editar (Edit Team Member)
+
+Updates an existing team member's information.
+
+**GET Request:**
+```python
+# view_trabajadores.py:83-92
+elif action == 'editar':
+    try:
+        data['id'] = id = request.GET['id']
+        Encargado = encargado.objects.get(id=id)
+        form = trabajadoresForm(initial=model_to_dict(Encargado))
+        data['formulario'] = form
+        return render(request, 'trabajadores/formulario.html', data)
+    except Exception as ex:
+        messages.error(request, ex)
+        return redirect('/trabajadores/')
+```
+
+**POST Request:**
+```python
+# view_trabajadores.py:37-49
+elif action == 'editar':
+    with transaction.atomic():
+        try:
+            id = request.POST['id']
+            Encargado = encargado.objects.get(id=id)
+            form = trabajadoresForm(request.POST, instance=Encargado)
+            if form.is_valid():
+                form.save()
+                messages.success(request, 'El registro se editó correctamente')
+            else:
+                messages.error(request, 'error')
+        except Exception as ex:
+            messages.error(request, ex)
+```
+
+<ParamField path="id" type="integer" required>
+  ID of the team member to edit
+</ParamField>
+
+**Response:**
+
+<ResponseField name="formulario" type="trabajadoresForm">
+  Pre-populated form instance with existing team member data
+</ResponseField>
+
+### eliminar (Delete Team Member)
+
+Performs a soft delete by setting the `status` field to `False`.
+
+**GET Request:**
+```python
+# view_trabajadores.py:93-96
+elif action == 'eliminar':
+    data['id'] = id = request.GET['id']
+    data['trabajadores'] = Encargado = encargado.objects.get(id=id)
+    return render(request, 'trabajadores/eliminar.html', data)
+```
+
+**POST Request:**
+```python
+# view_trabajadores.py:61-70
+elif action == 'eliminar':
+    with transaction.atomic():
+        try:
+            id = request.POST['id']
+            Encargado = encargado.objects.get(id=id)
+            Encargado.status = False
+            Encargado.save()
+            messages.success(request, 'registro eliminado')
+        except Exception as ex:
+            messages.error(request, ex)
+```
+
+<Note>
+  **Soft Delete:** Team members are not permanently removed from the database. The `status` field is set to `False` to hide them from active listings while preserving historical data.
+</Note>
+
+**Parameters:**
+
+<ParamField path="id" type="integer" required>
+  ID of the team member to delete
+</ParamField>
+
+### pdflistado (PDF Listing)
+
+Generates a PDF-ready listing of all active team members.
+
+**GET Request:**
+```python
+# view_trabajadores.py:98-100
+elif action == 'pdflistado':
+    data['listado'] = encargado.objects.filter(status=True).order_by('nombres')
+    return render(request, 'pdf/trabajadores/listadoM.html', data)
+```
+
+**POST Request:**
+```python
+# view_trabajadores.py:51-59
+elif action == 'pdflistado':
+    with transaction.atomic():
+        try:
+            data['action'] = encargado.objects.get(id=request.GET['id'])
+            template = get_template('pdf/trabajadores/listadoM.html')
+            return JsonResponse({'data': template.render(data)})
+        except Exception as ex:
+            messages.error(request, ex)
+            return JsonResponse({"mensaje": mensaje})
+```
+
+<ResponseField name="listado" type="QuerySet">
+  Django QuerySet containing all active team members (status=True) ordered by name
+</ResponseField>
+
+<ResponseField name="data" type="string">
+  Rendered HTML template (POST request returns JSON)
+</ResponseField>
+
+### consultar (Query Team Member Details)
+
+Returns team member details as JSON for AJAX requests.
+
+**GET Request:**
+```python
+# view_trabajadores.py:102-112
+elif action == 'consultar':
+    try:
+        resultado = True
+        data['id'] = id = request.GET['id']
+        data['encargado'] = Encargado = encargado.objects.get(id=id)
+        template = get_template('trabajadores/listadoajax.html')
+        return JsonResponse({"result": resultado, 'data': template.render(data)})
+    except Exception as ex:
+        resultado = False
+        mensaje = ex
+        return JsonResponse({"result": resultado, 'mensaje': mensaje})
+```
+
+<ParamField path="id" type="integer" required>
+  ID of the team member to query
+</ParamField>
+
+**Response:**
+
+<ResponseField name="result" type="boolean">
+  Operation success status
+</ResponseField>
+
+<ResponseField name="data" type="string">
+  Rendered HTML template containing team member details (on success)
+</ResponseField>
+
+<ResponseField name="mensaje" type="string">
+  Error message (on failure)
+</ResponseField>
+
+## Default View (Listing)
+
+When no action is specified, the view returns a listing of all active team members:
+
+```python
+# view_trabajadores.py:115-119
+try:
+    data['listado'] = encargado.objects.filter(status=True)
+except Exception as ex:
+    print(ex)
+return render(request, 'trabajadores/listado.html', data)
+```
+
+**Response:**
+
+<ResponseField name="listado" type="QuerySet">
+  Django QuerySet containing all active team members (status=True)
+</ResponseField>
+
+## Transaction Management
+
+All write operations (agregar, editar, eliminar) use Django's `transaction.atomic()` context manager to ensure database consistency:
+
+```python
+with transaction.atomic():
+    try:
+        # Database operations
+    except Exception as ex:
+        messages.error(request, ex)
+```
+
+<Note>
+  **Atomicity:** If any error occurs during a transaction, all database changes are rolled back automatically to maintain data integrity.
+</Note>
+
+## Message Framework
+
+The view uses Django's message framework for user feedback:
+
+<ResponseField name="messages.success" type="method">
+  Displays success messages after successful operations
+  
+  **Examples:**
+  - "Registro Guardado Correctamente" (after creating team member)
+  - "El registro se editó correctamente" (after editing team member)
+  - "registro eliminado" (after deleting team member)
+</ResponseField>
+
+<ResponseField name="messages.error" type="method">
+  Displays error messages when operations fail
+  
+  **Examples:**
+  - "Registro ya existe" (duplicate team member name)
+  - "error" (form validation failure)
+  - Exception messages from try/except blocks
+</ResponseField>
+
+## Form Integration
+
+The view integrates with [trabajadoresForm](/api/forms#trabajadoresform) for data validation and rendering:
+
+```python
+from CTP.forms import trabajadoresForm
+```
+
+## Custom Save Method
+
+The team member model uses a custom save method that accepts the request object:
+
+```python
+# view_trabajadores.py:31
+Encargado.save(request)
+```
+
+<Note>
+  The `encargado` model has a custom `save()` method that accepts a request parameter, allowing it to capture additional context such as user information during creation.
+</Note>
+
+## Dependencies
+
+```python
+from django.contrib import messages
+from django.db import transaction
+from django.forms import model_to_dict
+from django.http import JsonResponse
+from django.shortcuts import render, redirect
+from django.template.loader import get_template
+from django.contrib.auth.decorators import login_required
+from CTP.forms import trabajadoresForm
+from CTP.models import encargado
+```
+
+## URL Routing
+
+**Base Path:** `/trabajadores/`
+
+**Action URLs:**
+- `/trabajadores/?action=agregar` - Add new team member
+- `/trabajadores/?action=editar&id=1` - Edit team member with ID 1
+- `/trabajadores/?action=eliminar&id=1` - Delete team member with ID 1
+- `/trabajadores/?action=pdflistado` - Generate PDF listing
+- `/trabajadores/?action=consultar&id=1` - Query team member details
+
+## Template Integration
+
+The view renders different templates based on the action:
+
+<ResponseField name="trabajadores/formulario.html" type="template">
+  Form template for adding and editing team members
+</ResponseField>
+
+<ResponseField name="trabajadores/eliminar.html" type="template">
+  Confirmation template for team member deletion
+</ResponseField>
+
+<ResponseField name="trabajadores/listado.html" type="template">
+  Main listing template for displaying all active team members
+</ResponseField>
+
+<ResponseField name="pdf/trabajadores/listadoM.html" type="template">
+  PDF-ready template for team member listings
+</ResponseField>
+
+<ResponseField name="trabajadores/listadoajax.html" type="template">
+  AJAX template fragment for team member details
+</ResponseField>
+
+## Error Handling
+
+The view implements comprehensive error handling:
+
+```python
+try:
+    # Operations
+except Exception as ex:
+    messages.error(request, ex)
+    return redirect('/trabajadores/')
+```
+
+All exceptions are caught and displayed to users via the Django message framework, with appropriate redirects to maintain navigation flow.
+
+## Related Resources
+
+- [trabajadoresForm Reference](/api/forms#trabajadoresform)
+- [encargado Model](/api/models/team-members)
+- [Project Views](/api/views/project-views)
+- [Task Views](/api/views/task-views)

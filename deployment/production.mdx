@@ -1,0 +1,613 @@
+---
+title: 'Production Deployment'
+description: 'Deploy Proyecto to production with security best practices'
+---
+
+This guide covers deploying Proyecto to a production environment with proper security, performance, and reliability configurations.
+
+## Pre-Deployment Checklist
+
+<Warning>
+  Review all items in this checklist before deploying to production. Missing security configurations can expose your application to attacks.
+</Warning>
+
+<Steps>
+  <Step title="Security Settings">
+    Verify critical security settings:
+
+    ```python proyecto/settings.py
+    DEBUG = False  # MUST be False
+    SECRET_KEY = os.environ.get('DJANGO_SECRET_KEY')  # Use environment variable
+    ALLOWED_HOSTS = ['yourdomain.com', 'www.yourdomain.com']
+    ```
+
+    <Warning>
+      Never deploy with `DEBUG = True`. This exposes sensitive application internals and stack traces.
+    </Warning>
+  </Step>
+
+  <Step title="Database Configuration">
+    Use environment variables for database credentials:
+
+    ```python
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.postgresql_psycopg2',
+            'NAME': os.environ.get('DB_NAME'),
+            'USER': os.environ.get('DB_USER'),
+            'PASSWORD': os.environ.get('DB_PASSWORD'),
+            'HOST': os.environ.get('DB_HOST'),
+            'PORT': os.environ.get('DB_PORT', '5432'),
+            'ATOMIC_REQUESTS': True,
+        }
+    }
+    ```
+  </Step>
+
+  <Step title="Static Files">
+    Configure static file serving:
+
+    ```python
+    STATIC_ROOT = BASE_DIR / 'staticfiles'
+    STATIC_URL = '/static/'
+    ```
+
+    Collect static files:
+
+    ```bash
+    python manage.py collectstatic --noinput
+    ```
+  </Step>
+
+  <Step title="Additional Security Headers">
+    Add these security settings:
+
+    ```python
+    # HTTPS/SSL
+    SECURE_SSL_REDIRECT = True
+    SESSION_COOKIE_SECURE = True
+    CSRF_COOKIE_SECURE = True
+
+    # HSTS
+    SECURE_HSTS_SECONDS = 31536000  # 1 year
+    SECURE_HSTS_INCLUDE_SUBDOMAINS = True
+    SECURE_HSTS_PRELOAD = True
+
+    # Other security
+    SECURE_BROWSER_XSS_FILTER = True
+    SECURE_CONTENT_TYPE_NOSNIFF = True
+    X_FRAME_OPTIONS = 'DENY'
+    ```
+  </Step>
+</Steps>
+
+## Production Deployment Steps
+
+<Steps>
+  <Step title="Install Dependencies">
+    Set up a Python virtual environment and install requirements:
+
+    ```bash
+    # Create virtual environment
+    python3 -m venv venv
+    source venv/bin/activate
+
+    # Install dependencies
+    pip install -r requirements.txt
+    ```
+
+    **Required packages:**
+    - Django==3.2.18
+    - psycopg2==2.9.5 (PostgreSQL adapter)
+    - asgiref==3.4.1
+    - pytz==2022.7.1
+    - Gunicorn (for WSGI server)
+  </Step>
+
+  <Step title="Set Environment Variables">
+    Create a `.env` file or set environment variables:
+
+    ```bash
+    # Security
+    export DJANGO_SECRET_KEY="your-secret-key-here"
+    export DJANGO_DEBUG="False"
+    export ALLOWED_HOSTS="yourdomain.com,www.yourdomain.com"
+
+    # Database
+    export DB_NAME="Proyecto"
+    export DB_USER="proyecto_user"
+    export DB_PASSWORD="secure_password"
+    export DB_HOST="localhost"
+    export DB_PORT="5432"
+
+    # Django settings module
+    export DJANGO_SETTINGS_MODULE="proyecto.settings"
+    ```
+
+    <Tip>
+      Use a tool like `python-dotenv` to load environment variables from a `.env` file, but never commit this file to version control.
+    </Tip>
+  </Step>
+
+  <Step title="Prepare Database">
+    Set up the production database:
+
+    ```bash
+    # Run migrations
+    python manage.py migrate
+
+    # Create superuser
+    python manage.py createsuperuser
+
+    # Collect static files
+    python manage.py collectstatic --noinput
+    ```
+
+    See [Database Setup](/deployment/database-setup) for PostgreSQL configuration.
+  </Step>
+
+  <Step title="Install Gunicorn">
+    Install Gunicorn as your WSGI HTTP server:
+
+    ```bash
+    pip install gunicorn
+    ```
+  </Step>
+
+  <Step title="Test Gunicorn">
+    Test that Gunicorn can serve your application:
+
+    ```bash
+    gunicorn --bind 0.0.0.0:8000 proyecto.wsgi:application
+    ```
+
+    Visit `http://your-server:8000` to verify it works.
+  </Step>
+</Steps>
+
+## WSGI Application
+
+Proyecto's WSGI application is defined in `proyecto/wsgi.py`:
+
+```python proyecto/wsgi.py
+import os
+from django.core.wsgi import get_wsgi_application
+
+os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'proyecto.settings')
+application = get_wsgi_application()
+```
+
+This exposes the WSGI callable as `application`, which is used by Gunicorn, uWSGI, and other WSGI servers.
+
+## Process Management with Systemd
+
+Create a systemd service file to manage Gunicorn:
+
+```ini /etc/systemd/system/proyecto.service
+[Unit]
+Description=Proyecto Django Application
+After=network.target
+
+[Service]
+User=www-data
+Group=www-data
+WorkingDirectory=/var/www/proyecto
+Environment="PATH=/var/www/proyecto/venv/bin"
+EnvironmentFile=/var/www/proyecto/.env
+ExecStart=/var/www/proyecto/venv/bin/gunicorn \
+    --workers 3 \
+    --bind unix:/var/www/proyecto/proyecto.sock \
+    proyecto.wsgi:application
+
+[Install]
+WantedBy=multi-user.target
+```
+
+**Start and enable the service:**
+
+```bash
+sudo systemctl start proyecto
+sudo systemctl enable proyecto
+sudo systemctl status proyecto
+```
+
+<Note>
+  Adjust `User`, `Group`, and `WorkingDirectory` to match your deployment environment.
+</Note>
+
+## Web Server Configuration
+
+### Nginx Configuration
+
+Configure Nginx as a reverse proxy:
+
+```nginx /etc/nginx/sites-available/proyecto
+server {
+    listen 80;
+    server_name yourdomain.com www.yourdomain.com;
+
+    location = /favicon.ico { access_log off; log_not_found off; }
+
+    location /static/ {
+        alias /var/www/proyecto/staticfiles/;
+    }
+
+    location /media/ {
+        alias /var/www/proyecto/media/;
+    }
+
+    location / {
+        include proxy_params;
+        proxy_pass http://unix:/var/www/proyecto/proyecto.sock;
+    }
+}
+```
+
+**Enable the site:**
+
+```bash
+sudo ln -s /etc/nginx/sites-available/proyecto /etc/nginx/sites-enabled/
+sudo nginx -t
+sudo systemctl restart nginx
+```
+
+### Apache Configuration
+
+Alternatively, use Apache with mod_wsgi:
+
+```apache /etc/apache2/sites-available/proyecto.conf
+<VirtualHost *:80>
+    ServerName yourdomain.com
+    ServerAlias www.yourdomain.com
+
+    WSGIDaemonProcess proyecto python-path=/var/www/proyecto python-home=/var/www/proyecto/venv
+    WSGIProcessGroup proyecto
+    WSGIScriptAlias / /var/www/proyecto/proyecto/wsgi.py
+
+    Alias /static /var/www/proyecto/staticfiles
+    Alias /media /var/www/proyecto/media
+
+    <Directory /var/www/proyecto/proyecto>
+        <Files wsgi.py>
+            Require all granted
+        </Files>
+    </Directory>
+
+    <Directory /var/www/proyecto/staticfiles>
+        Require all granted
+    </Directory>
+
+    <Directory /var/www/proyecto/media>
+        Require all granted
+    </Directory>
+</VirtualHost>
+```
+
+## SSL/HTTPS Setup
+
+<Warning>
+  Always use HTTPS in production to encrypt data in transit and protect user credentials.
+</Warning>
+
+### Using Let's Encrypt (Certbot)
+
+<Steps>
+  <Step title="Install Certbot">
+    ```bash
+    sudo apt install certbot python3-certbot-nginx
+    ```
+  </Step>
+
+  <Step title="Obtain SSL Certificate">
+    ```bash
+    sudo certbot --nginx -d yourdomain.com -d www.yourdomain.com
+    ```
+  </Step>
+
+  <Step title="Auto-Renewal">
+    Certbot automatically sets up renewal. Test it:
+
+    ```bash
+    sudo certbot renew --dry-run
+    ```
+  </Step>
+</Steps>
+
+### Update Django Settings for HTTPS
+
+Add these settings when using HTTPS:
+
+```python proyecto/settings.py
+SECURE_SSL_REDIRECT = True
+SESSION_COOKIE_SECURE = True
+CSRF_COOKIE_SECURE = True
+SECURE_HSTS_SECONDS = 31536000
+SECURE_HSTS_INCLUDE_SUBDOMAINS = True
+SECURE_HSTS_PRELOAD = True
+```
+
+## Gunicorn Configuration
+
+Create a Gunicorn configuration file:
+
+```python /var/www/proyecto/gunicorn_config.py
+import multiprocessing
+
+# Bind to Unix socket
+bind = 'unix:/var/www/proyecto/proyecto.sock'
+
+# Worker processes
+workers = multiprocessing.cpu_count() * 2 + 1
+worker_class = 'sync'
+worker_connections = 1000
+
+# Timeouts
+timeout = 30
+keepalive = 2
+
+# Logging
+accesslog = '/var/www/proyecto/logs/gunicorn-access.log'
+errorlog = '/var/www/proyecto/logs/gunicorn-error.log'
+loglevel = 'info'
+
+# Process naming
+proc_name = 'proyecto'
+
+# Security
+limit_request_line = 4096
+limit_request_fields = 100
+limit_request_field_size = 8190
+```
+
+Update systemd service to use the config:
+
+```ini
+ExecStart=/var/www/proyecto/venv/bin/gunicorn \
+    --config /var/www/proyecto/gunicorn_config.py \
+    proyecto.wsgi:application
+```
+
+## Monitoring and Logging
+
+### Application Logging
+
+Configure Django logging in settings.py:
+
+```python
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'formatters': {
+        'verbose': {
+            'format': '{levelname} {asctime} {module} {message}',
+            'style': '{',
+        },
+    },
+    'handlers': {
+        'file': {
+            'level': 'INFO',
+            'class': 'logging.FileHandler',
+            'filename': '/var/www/proyecto/logs/django.log',
+            'formatter': 'verbose',
+        },
+    },
+    'root': {
+        'handlers': ['file'],
+        'level': 'INFO',
+    },
+}
+```
+
+### Monitoring Tools
+
+Consider these monitoring solutions:
+
+- **System metrics**: Prometheus + Grafana
+- **Application performance**: New Relic, DataDog
+- **Error tracking**: Sentry
+- **Uptime monitoring**: UptimeRobot, Pingdom
+
+### Health Check Endpoint
+
+Create a simple health check view:
+
+```python CTP/views.py
+from django.http import JsonResponse
+from django.db import connection
+
+def health_check(request):
+    try:
+        # Check database connection
+        connection.ensure_connection()
+        return JsonResponse({'status': 'healthy'}, status=200)
+    except Exception as e:
+        return JsonResponse({'status': 'unhealthy', 'error': str(e)}, status=503)
+```
+
+Add to URLs:
+
+```python
+path('health/', health_check, name='health_check'),
+```
+
+## Performance Optimization
+
+### Database Connection Pooling
+
+Install pgbouncer for PostgreSQL connection pooling:
+
+```bash
+sudo apt install pgbouncer
+```
+
+### Caching
+
+Add Redis caching:
+
+```bash
+pip install django-redis
+```
+
+```python settings.py
+CACHES = {
+    'default': {
+        'BACKEND': 'django_redis.cache.RedisCache',
+        'LOCATION': 'redis://127.0.0.1:6379/1',
+        'OPTIONS': {
+            'CLIENT_CLASS': 'django_redis.client.DefaultClient',
+        }
+    }
+}
+```
+
+### Static File Compression
+
+Enable gzip compression in Nginx:
+
+```nginx
+gzip on;
+gzip_vary on;
+gzip_proxied any;
+gzip_comp_level 6;
+gzip_types text/plain text/css text/xml text/javascript application/json application/javascript application/xml+rss;
+```
+
+## Backup Strategy
+
+<Warning>
+  Implement automated backups before going to production.
+</Warning>
+
+### Database Backups
+
+Create a backup script:
+
+```bash /var/www/proyecto/scripts/backup.sh
+#!/bin/bash
+BACKUP_DIR="/backups/proyecto"
+DATE=$(date +%Y%m%d_%H%M%S)
+
+# Create backup
+pg_dump -U proyecto_user -h localhost Proyecto > "$BACKUP_DIR/db_$DATE.sql"
+
+# Compress
+gzip "$BACKUP_DIR/db_$DATE.sql"
+
+# Keep only last 30 days
+find $BACKUP_DIR -name "db_*.sql.gz" -mtime +30 -delete
+```
+
+Schedule with cron:
+
+```bash
+0 2 * * * /var/www/proyecto/scripts/backup.sh
+```
+
+### Media File Backups
+
+Sync media files to remote storage:
+
+```bash
+rsync -avz /var/www/proyecto/media/ backup-server:/backups/proyecto/media/
+```
+
+## Deployment Checklist
+
+<Steps>
+  <Step title="Security">
+    - [ ] `DEBUG = False`
+    - [ ] Strong `SECRET_KEY` in environment variable
+    - [ ] `ALLOWED_HOSTS` configured
+    - [ ] HTTPS enabled with valid SSL certificate
+    - [ ] Security headers configured
+    - [ ] Database credentials in environment variables
+  </Step>
+
+  <Step title="Database">
+    - [ ] PostgreSQL installed and running
+    - [ ] Database created
+    - [ ] Migrations applied
+    - [ ] Superuser created
+    - [ ] Automated backups configured
+  </Step>
+
+  <Step title="Static Files">
+    - [ ] `STATIC_ROOT` configured
+    - [ ] `collectstatic` executed
+    - [ ] Web server serving static files
+    - [ ] Media files directory created
+  </Step>
+
+  <Step title="Application Server">
+    - [ ] Gunicorn installed
+    - [ ] Systemd service created and enabled
+    - [ ] Application starts successfully
+    - [ ] Logs directory created and writable
+  </Step>
+
+  <Step title="Web Server">
+    - [ ] Nginx/Apache installed and configured
+    - [ ] Reverse proxy configured
+    - [ ] SSL/HTTPS configured
+    - [ ] Static and media files served correctly
+  </Step>
+
+  <Step title="Monitoring">
+    - [ ] Application logging configured
+    - [ ] Health check endpoint created
+    - [ ] Monitoring tools set up
+    - [ ] Error tracking configured
+  </Step>
+</Steps>
+
+## Troubleshooting
+
+### 502 Bad Gateway
+
+Check Gunicorn is running:
+
+```bash
+sudo systemctl status proyecto
+journalctl -u proyecto -n 50
+```
+
+### Static Files Not Loading
+
+Verify `collectstatic` was run and web server configuration:
+
+```bash
+python manage.py collectstatic --noinput
+sudo nginx -t
+```
+
+### Database Connection Errors
+
+Verify database credentials and connectivity:
+
+```bash
+psql -U proyecto_user -d Proyecto -h localhost
+```
+
+### Permission Errors
+
+Ensure proper ownership:
+
+```bash
+sudo chown -R www-data:www-data /var/www/proyecto
+sudo chmod -R 755 /var/www/proyecto
+```
+
+## Next Steps
+
+After deployment:
+
+1. Monitor application logs for errors
+2. Set up automated backups
+3. Configure monitoring and alerting
+4. Perform load testing
+5. Document your deployment process
+6. Create a rollback plan
+
+<Tip>
+  Keep a deployment checklist and update it as you refine your deployment process.
+</Tip>

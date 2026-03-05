@@ -1,0 +1,360 @@
+---
+title: 'Project Views'
+description: 'API reference for project management view functions'
+---
+
+## Overview
+
+The `viewProyectos` function is a Django view that handles all project-related operations including creating, editing, deleting, and listing projects. This view is protected by the `@login_required` decorator and supports both GET and POST requests with action-based routing.
+
+**Location:** `CTP/view_proyectos.py:13`
+
+## Function Signature
+
+```python
+@login_required
+def viewProyectos(request):
+    """
+    Main view function for managing projects (Proyectos)
+    
+    Args:
+        request: Django HttpRequest object
+        
+    Returns:
+        HttpResponse: Rendered template or redirect/JSON response
+    """
+```
+
+## Decorator
+
+<ParamField path="@login_required" type="decorator">
+  Requires user authentication before accessing this view. Unauthenticated users are redirected to the login page.
+</ParamField>
+
+## Request Parameters
+
+### Context Data
+
+The view initializes a context dictionary with default values:
+
+<ParamField path="empresa" type="string" default="Michael">
+  Company/organization name displayed in templates
+</ParamField>
+
+<ParamField path="nombre" type="string" default="Proyectos">
+  Display name for the current section
+</ParamField>
+
+<ParamField path="ruta" type="string" default="/Proyectos/">
+  Base URL path for project operations
+</ParamField>
+
+### Action Parameters
+
+<ParamField path="action" type="string" required>
+  Specifies the operation to perform. Supported values:
+  - `agregar` - Add new project
+  - `editar` - Edit existing project
+  - `eliminar` - Delete project (soft delete)
+  - `pdflistado` - Generate PDF listing
+  - `consultar` - Query project details (AJAX)
+</ParamField>
+
+<ParamField path="id" type="integer">
+  Project ID for edit, delete, and consultar actions
+</ParamField>
+
+## Actions
+
+### agregar (Add Project)
+
+Creates a new project with transaction management and duplicate validation.
+
+**GET Request:**
+```python
+# view_proyectos.py:79-82
+if action == 'agregar':
+    form = ProjectForm()
+    data['formulario'] = form
+    return render(request, 'Proyectos/formulario.html', data)
+```
+
+**POST Request:**
+```python
+# view_proyectos.py:20-37
+if action == 'agregar':
+    with transaction.atomic():
+        try:
+            if Proyectos.objects.filter(nombre_proyecto=request.POST['nombre_proyecto']).exists():
+                messages.error(request, 'El nombre está repetido')
+                return redirect('{}?action=agregar'.format(request.path))
+            else:
+                form = ProjectForm(request.POST)
+                if form.is_valid():
+                    proyecto = Proyectos(nombre_proyecto=form.cleaned_data['nombre_proyecto'],
+                                        lider=form.cleaned_data['lider'])
+                    proyecto.save()
+                    encargados = form.cleaned_data['encargados']
+                    proyecto.encargados.set(encargados)
+                    messages.success(request, 'Proyecto Guardado Correctamente')
+        except Exception as ex:
+            messages.error(request, ex)
+```
+
+<Note>
+  **Duplicate Prevention:** The view checks if a project with the same `nombre_proyecto` already exists before creating a new record.
+</Note>
+
+**Response Fields:**
+
+<ResponseField name="formulario" type="ProjectForm">
+  Form instance for rendering in template (GET)
+</ResponseField>
+
+<ResponseField name="messages" type="Message[]">
+  Success or error messages added to Django message framework
+</ResponseField>
+
+### editar (Edit Project)
+
+Updates an existing project's information.
+
+**GET Request:**
+```python
+# view_proyectos.py:85-94
+elif action == 'editar':
+    try:
+        data['id'] = id = request.GET['id']
+        proyecto = Proyectos.objects.get(id=id)
+        form = ProjectForm(initial=model_to_dict(proyecto))
+        data['formulario'] = form
+        return render(request, 'Proyectos/formulario.html', data)
+    except Exception as ex:
+        messages.error(request, ex)
+        return redirect('/Proyectos/')
+```
+
+**POST Request:**
+```python
+# view_proyectos.py:39-53
+elif action == 'editar':
+    with transaction.atomic():
+        try:
+            id = request.POST['id']
+            proyecto = Proyectos.objects.get(id=id)
+            if proyecto.encargados.exists():
+                encargado = proyecto.encargados.first().nombres
+            else:
+                encargado = None
+            form = ProjectForm(request.POST, instance=proyecto)
+            if form.is_valid():
+                form.save()
+                messages.success(request, 'Proyectos guardado exitosamente!')
+        except Exception as ex:
+            messages.error(request, ex)
+```
+
+<ParamField path="id" type="integer" required>
+  ID of the project to edit
+</ParamField>
+
+### eliminar (Delete Project)
+
+Performs a soft delete by setting the `status` field to `False`.
+
+**GET Request:**
+```python
+# view_proyectos.py:96-104
+elif action == 'eliminar':
+    try:
+        resultado = True
+        data['id'] = id = request.GET['id']
+        data['Proyectos'] = proyectos = Proyectos.objects.get(id=id)
+        return render(request, 'Proyectos/eliminar.html', data)
+    except Exception as ex:
+        messages.error(request, ex)
+        return redirect(request, '/Proyectos/')
+```
+
+**POST Request:**
+```python
+# view_proyectos.py:55-64
+elif action == 'eliminar':
+    with transaction.atomic():
+        try:
+            id = request.POST['id']
+            proyectos = Proyectos.objects.get(id=id)
+            proyectos.status = False
+            proyectos.save()
+            messages.success(request, 'Proyectos eliminado')
+        except Exception as ex:
+            messages.error(request, ex)
+```
+
+<Note>
+  **Soft Delete:** Projects are not permanently removed from the database. The `status` field is set to `False` to hide them from listings.
+</Note>
+
+### pdflistado (PDF Listing)
+
+Generates a PDF-ready listing of all active projects.
+
+**GET Request:**
+```python
+# view_proyectos.py:107-118
+elif action == 'pdflistado':
+    proyectos = Proyectos.objects.filter(status=True).order_by('nombre_proyecto', 'lider')
+    data['listado'] = []
+    for proyecto in proyectos:
+        encargados = [e.nombres for e in proyecto.encargados.all()]
+        data['listado'].append({
+            'pk': proyecto.pk,
+            'nombre_proyecto': proyecto.nombre_proyecto,
+            'lider': proyecto.lider.nombres,
+            'encargados': encargados
+        })
+    return render(request, 'pdf/Proyectos/listadoP.html', data)
+```
+
+<ResponseField name="listado" type="array">
+  Array of project objects with the following structure:
+  
+  <ResponseField name="pk" type="integer">
+    Primary key of the project
+  </ResponseField>
+  
+  <ResponseField name="nombre_proyecto" type="string">
+    Project name
+  </ResponseField>
+  
+  <ResponseField name="lider" type="string">
+    Project leader name
+  </ResponseField>
+  
+  <ResponseField name="encargados" type="string[]">
+    Array of team member names assigned to the project
+  </ResponseField>
+</ResponseField>
+
+### consultar (Query Project Details)
+
+Returns project details as JSON for AJAX requests.
+
+**GET Request:**
+```python
+# view_proyectos.py:120-131
+elif action == 'consultar':
+    try:
+        resultado = True
+        data['id'] = id = request.GET['id']
+        data['Proyectos'] = proyectos = Proyectos.objects.get(id=id)
+        template = get_template('Proyectos/listadoajax.html')
+        return JsonResponse({"result": resultado, 'data': template.render(data)})
+    except Exception as ex:
+        resultado = False
+        mensaje = ex
+        return JsonResponse({"result": resultado, 'mensaje': mensaje})
+```
+
+<ResponseField name="result" type="boolean">
+  Operation success status
+</ResponseField>
+
+<ResponseField name="data" type="string">
+  Rendered HTML template (on success)
+</ResponseField>
+
+<ResponseField name="mensaje" type="string">
+  Error message (on failure)
+</ResponseField>
+
+## Default View (Listing)
+
+When no action is specified, the view returns a listing of all active projects:
+
+```python
+# view_proyectos.py:135-149
+try:
+    proyectos = Proyectos.objects.filter(status=True).order_by('nombre_proyecto', 'lider')
+    data['listado'] = []
+    for proyecto in proyectos:
+        encargados = [e.nombres for e in proyecto.encargados.all()]
+        data['listado'].append({
+            'cont': 0,
+            'pk': proyecto.pk,
+            'nombre_proyecto': proyecto.nombre_proyecto,
+            'lider': proyecto.lider.nombres,
+            'encargados': encargados
+        })
+except Exception as ex:
+    print(ex)
+return render(request, 'Proyectos/listado.html', data)
+```
+
+## Transaction Management
+
+All write operations (agregar, editar, eliminar) use Django's `transaction.atomic()` context manager to ensure database consistency:
+
+```python
+with transaction.atomic():
+    try:
+        # Database operations
+    except Exception as ex:
+        messages.error(request, ex)
+```
+
+<Note>
+  **Atomicity:** If any error occurs during a transaction, all database changes are rolled back automatically.
+</Note>
+
+## Message Framework
+
+The view uses Django's message framework for user feedback:
+
+<ResponseField name="messages.success" type="method">
+  Displays success messages after successful operations
+</ResponseField>
+
+<ResponseField name="messages.error" type="method">
+  Displays error messages when operations fail
+</ResponseField>
+
+## Form Integration
+
+The view integrates with [ProjectForm](/api/forms#projectform) for data validation and rendering:
+
+```python
+from CTP.forms import ProjectForm
+```
+
+## Dependencies
+
+```python
+from django.contrib import messages
+from django.db import transaction
+from django.forms import model_to_dict
+from django.http import JsonResponse
+from django.shortcuts import render, redirect
+from django.template.loader import get_template
+from django.contrib.auth.decorators import login_required
+from CTP.forms import ProjectForm
+from CTP.models import Proyectos, encargado
+```
+
+## URL Routing
+
+**Base Path:** `/Proyectos/`
+
+**Action URLs:**
+- `/Proyectos/?action=agregar` - Add new project
+- `/Proyectos/?action=editar&id=1` - Edit project with ID 1
+- `/Proyectos/?action=eliminar&id=1` - Delete project with ID 1
+- `/Proyectos/?action=pdflistado` - Generate PDF listing
+- `/Proyectos/?action=consultar&id=1` - Query project details
+
+## Related Resources
+
+- [ProjectForm Reference](/api/forms#projectform)
+- [Proyectos Model](/api/models/projects)
+- [Task Views](/api/views/task-views)
+- [Team Views](/api/views/team-views)

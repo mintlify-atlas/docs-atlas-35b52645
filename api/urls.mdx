@@ -1,0 +1,349 @@
+---
+title: "URL Configuration Reference"
+description: "Complete URL routing configuration for the Proyecto application"
+---
+
+## Overview
+
+This page documents the URL routing configuration for the Proyecto Django application. URL patterns are defined across two files:
+
+- `proyecto/urls.py` - Main project URL configuration
+- `CTP/urls.py` - Application-specific URL patterns
+
+Django uses regular expressions via `re_path()` to match URL patterns and route requests to the appropriate view functions.
+
+## Main URL Configuration
+
+The main URL configuration is located at `proyecto/urls.py`:
+
+```python proyecto/urls.py
+from django.contrib import admin
+from django.urls import re_path
+from django.urls.conf import include
+from django.conf import settings
+from django.conf.urls.static import static
+
+urlpatterns = [
+    re_path(r'', include('CTP.urls')),
+    re_path(r'admin/', admin.site.urls),
+    re_path(r'accounts/', include('django.contrib.auth.urls'))
+]
+urlpatterns += static(settings.STATIC_URL, document_root=settings.STATIC_ROOT)
+urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
+```
+
+### Admin Interface
+
+<ParamField path="/admin/" type="URL Pattern">
+  Django admin interface for database management and administration.
+</ParamField>
+
+**Pattern:** `re_path(r'admin/', admin.site.urls)`
+
+Access the admin interface at `/admin/` to manage:
+- Users and permissions
+- Projects, tasks, and team members
+- Site configuration
+
+<Note>
+  You must create a superuser account to access the admin interface. See the [Quickstart Guide](/quickstart) for instructions.
+</Note>
+
+### Authentication URLs
+
+<ParamField path="/accounts/" type="URL Pattern">
+  Built-in Django authentication views for login, logout, password reset, etc.
+</ParamField>
+
+**Pattern:** `re_path(r'accounts/', include('django.contrib.auth.urls'))`
+
+This includes standard authentication URLs:
+- `/accounts/login/` - User login page
+- `/accounts/logout/` - User logout
+- `/accounts/password_change/` - Password change form
+- `/accounts/password_reset/` - Password reset flow
+
+After successful login, users are redirected to `LOGIN_REDIRECT_URL` (configured as `/` in settings).
+
+### Static and Media Files
+
+Static and media files are served during development:
+
+```python
+urlpatterns += static(settings.STATIC_URL, document_root=settings.STATIC_ROOT)
+urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
+```
+
+<Warning>
+  These static/media file handlers should only be used in development. In production, configure your web server (nginx/Apache) to serve static files directly.
+</Warning>
+
+## CTP Application URLs
+
+The main application URLs are defined in `CTP/urls.py`:
+
+```python CTP/urls.py
+from django.urls import re_path
+from CTP.view_registros import viewTareas
+from CTP.view_trabajadores import viewtrabajadores
+from CTP.view_proyectos import viewProyectos
+from seguridad.menu import menuinicial
+from CTP.crearusuario import crear_superusuario
+
+urlpatterns = [
+    re_path(r'^$', menuinicial, name='inicio'),
+    re_path(r'Tareas/', viewTareas, name='Tareas'),
+    re_path(r'trabajadores/', viewtrabajadores, name='trabajadores'),
+    re_path(r'Proyectos/', viewProyectos, name='Proyectos'),
+    re_path(r'registration/', crear_superusuario, name='crear_superusuario'),
+]
+```
+
+### Home Page
+
+<ParamField path="/" type="URL Pattern">
+  Application home page and main menu.
+</ParamField>
+
+**Pattern:** `re_path(r'^$', menuinicial, name='inicio')`  
+**View:** `seguridad.menu.menuinicial`  
+**Name:** `inicio`
+
+The root URL displays the main menu after authentication. Users can navigate to different sections from here.
+
+### Projects Management
+
+<ParamField path="/Proyectos/" type="URL Pattern">
+  Project management interface for creating, editing, viewing, and deleting projects.
+</ParamField>
+
+**Pattern:** `re_path(r'Proyectos/', viewProyectos, name='Proyectos')`  
+**View:** `CTP.view_proyectos.viewProyectos`  
+**Name:** `Proyectos`
+
+This URL handles all project-related operations through action parameters:
+
+```python
+# View project list
+GET /Proyectos/
+
+# Add new project form
+GET /Proyectos/?action=agregar
+
+# Edit project form
+GET /Proyectos/?action=editar&id=1
+
+# Delete project confirmation
+GET /Proyectos/?action=eliminar&id=1
+
+# Generate PDF report
+GET /Proyectos/?action=pdflistado
+
+# Query project details (AJAX)
+GET /Proyectos/?action=consultar&id=1
+```
+
+<Tip>
+  All project operations require authentication via the `@login_required` decorator.
+</Tip>
+
+### Tasks Management
+
+<ParamField path="/Tareas/" type="URL Pattern">
+  Task management interface for creating, editing, viewing, and deleting tasks.
+</ParamField>
+
+**Pattern:** `re_path(r'Tareas/', viewTareas, name='Tareas')`  
+**View:** `CTP.view_registros.viewTareas`  
+**Name:** `Tareas`
+
+This URL handles all task-related operations:
+
+```python
+# View task list
+GET /Tareas/
+
+# Add new task form
+GET /Tareas/?action=agregar
+
+# Edit task form
+GET /Tareas/?action=editar&id=1
+
+# Delete task confirmation
+GET /Tareas/?action=eliminar&id=1
+
+# Generate PDF report
+GET /Tareas/?action=pdflistado
+
+# Query task details (AJAX)
+GET /Tareas/?action=consultar&id=1
+```
+
+### Team Members Management
+
+<ParamField path="/trabajadores/" type="URL Pattern">
+  Team member (encargado) management interface.
+</ParamField>
+
+**Pattern:** `re_path(r'trabajadores/', viewtrabajadores, name='trabajadores')`  
+**View:** `CTP.view_trabajadores.viewtrabajadores`  
+**Name:** `trabajadores`
+
+This URL handles all team member operations:
+
+```python
+# View team member list
+GET /trabajadores/
+
+# Add new team member form
+GET /trabajadores/?action=agregar
+
+# Edit team member form
+GET /trabajadores/?action=editar&id=1
+
+# Delete team member confirmation
+GET /trabajadores/?action=eliminar&id=1
+
+# Generate PDF report
+GET /trabajadores/?action=pdflistado
+
+# Query team member details (AJAX)
+GET /trabajadores/?action=consultar&id=1
+```
+
+### User Registration
+
+<ParamField path="/registration/" type="URL Pattern">
+  Superuser account creation interface.
+</ParamField>
+
+**Pattern:** `re_path(r'registration/', crear_superusuario, name='crear_superusuario')`  
+**View:** `CTP.crearusuario.crear_superusuario`  
+**Name:** `crear_superusuario`
+
+This URL provides a web interface for creating superuser accounts.
+
+<Note>
+  You can also create superusers via the command line using `python manage.py createsuperuser`.
+</Note>
+
+## URL Naming and Reverse Resolution
+
+Django's URL naming system allows you to reference URLs by name instead of hardcoding paths:
+
+```python
+# In views
+from django.shortcuts import redirect
+return redirect('Proyectos')  # Redirects to /Proyectos/
+
+# In templates
+<a href="{% url 'Tareas' %}">View Tasks</a>
+```
+
+All CTP URLs use named patterns:
+- `inicio` - Home page
+- `Proyectos` - Projects management
+- `Tareas` - Tasks management
+- `trabajadores` - Team members management
+- `crear_superusuario` - User registration
+
+## Action-Based URL Pattern
+
+The application uses an **action-based URL pattern** where a single URL handles multiple operations via query parameters:
+
+```python
+# URL format
+/resource/?action=operation&id=object_id
+
+# Examples
+/Proyectos/?action=agregar          # Create
+/Proyectos/?action=editar&id=5      # Update
+/Proyectos/?action=eliminar&id=5    # Delete
+/Proyectos/?action=consultar&id=5   # Read (AJAX)
+/Proyectos/?action=pdflistado       # Generate report
+```
+
+**Available Actions:**
+
+| Action | HTTP Method | Purpose |
+|--------|-------------|---------|
+| `agregar` | GET/POST | Display form (GET) or create record (POST) |
+| `editar` | GET/POST | Display form (GET) or update record (POST) |
+| `eliminar` | GET/POST | Display confirmation (GET) or delete record (POST) |
+| `consultar` | GET | Query record details via AJAX |
+| `pdflistado` | GET | Generate PDF report |
+
+<Note>
+  This action-based pattern keeps the URL structure simple while supporting full CRUD operations. The view function handles routing based on the `action` parameter.
+</Note>
+
+## URL Regular Expressions
+
+The application uses `re_path()` with regular expressions for URL matching:
+
+```python
+# Match exact root
+re_path(r'^$', view)
+
+# Match any path starting with 'Proyectos/'
+re_path(r'Proyectos/', view)
+
+# Match paths with named groups (not used in this project)
+re_path(r'^projects/(?P<id>\d+)/$', view)
+```
+
+<Tip>
+  Django also provides `path()` for simpler URL patterns without regex. Consider using `path()` for new URLs as it's more readable.
+</Tip>
+
+## Request Flow Example
+
+Here's how a typical request flows through the URL configuration:
+
+<Steps>
+  <Step title="Request arrives">
+    User navigates to `/Proyectos/?action=agregar`
+  </Step>
+  
+  <Step title="Main URL config">
+    Django checks `proyecto/urls.py` and finds the include for `CTP.urls`
+  </Step>
+  
+  <Step title="App URL config">
+    Django checks `CTP/urls.py` and matches the `Proyectos/` pattern
+  </Step>
+  
+  <Step title="View function">
+    The `viewProyectos` function is called with the request object
+  </Step>
+  
+  <Step title="Action routing">
+    The view checks the `action` parameter and renders the add project form
+  </Step>
+  
+  <Step title="Response">
+    Template is rendered and returned to the user
+  </Step>
+</Steps>
+
+## Authentication Requirements
+
+All CTP URLs require authentication via the `@login_required` decorator:
+
+```python
+from django.contrib.auth.decorators import login_required
+
+@login_required
+def viewProyectos(request):
+    # View logic
+    pass
+```
+
+If an unauthenticated user tries to access these URLs, they are redirected to `/accounts/login/`.
+
+## See Also
+
+- [Project Views](/api/views/project-views) - Detailed view function documentation
+- [Task Views](/api/views/task-views) - Task view implementation
+- [Team Views](/api/views/team-views) - Team member view implementation
+- [Authentication Guide](/guide/authentication) - Authentication system details

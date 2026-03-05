@@ -1,0 +1,259 @@
+---
+title: 'Project Management'
+description: 'Create, manage, and track projects with team assignments and leadership'
+icon: 'folder-open'
+---
+
+## Overview
+
+Proyecto provides comprehensive project management capabilities that allow you to organize work by creating projects, assigning team leaders, and managing team members. Each project tracks its lifecycle with automatic timestamps and soft-delete functionality for data integrity.
+
+<Note>
+All projects are tracked with automatic registration dates and times, ensuring complete audit trails for your organization.
+</Note>
+
+## Creating a New Project
+
+When you create a project, you'll define three key elements:
+
+<CardGroup cols={3}>
+  <Card title="Project Name" icon="tag">
+    A unique identifier for your project that describes the work
+  </Card>
+  <Card title="Project Leader" icon="user-tie">
+    A single team member who leads and oversees the project
+  </Card>
+  <Card title="Team Members" icon="users">
+    Multiple team members (encargados) assigned to work on the project
+  </Card>
+</CardGroup>
+
+### Project Creation Workflow
+
+1. Navigate to the Projects section (`/Proyectos/`)
+2. Click to add a new project
+3. Fill out the project form with:
+   - **Project Name** (`nombre_proyecto`) - Must be unique across all projects
+   - **Leader** (`lider`) - Select one team member to lead the project
+   - **Team Members** (`encargados`) - Select multiple team members to assign
+4. Submit the form
+
+<Tip>
+Project names must be unique. If you try to create a project with a duplicate name, you'll receive an error: "El nombre está repetido" (The name is repeated).
+</Tip>
+
+## Project Data Model
+
+The `Proyectos` model in `CTP/models.py` defines the structure:
+
+```python
+class Proyectos(ModeloBase):
+    nombre_proyecto = models.CharField(max_length=100)
+    lider = models.ForeignKey(encargado, on_delete=models.CASCADE, related_name='proyectos_lider')
+    encargados = models.ManyToManyField(encargado, related_name='proyectos_encargados')
+    # Inherited from ModeloBase:
+    # - fecha_registro (auto-generated registration date)
+    # - hora_registro (auto-generated registration time)
+    # - status (boolean for soft deletes)
+```
+
+### Understanding Project Relationships
+
+**Leader Assignment (ForeignKey)**
+Each project has exactly one leader. This is a `ForeignKey` relationship to the `encargado` model, meaning:
+- One team member serves as the project leader
+- The leader has overall responsibility for the project
+- If the leader is deleted, the project is also deleted (CASCADE)
+
+**Team Member Assignment (ManyToMany)**
+Projects can have multiple team members assigned. This is a `ManyToManyField` relationship:
+- Multiple team members can work on a single project
+- A team member can be assigned to multiple projects
+- Team assignments are managed through the `encargados` field
+
+<Note>
+The leader can also be included in the team members list, or they can be separate. The system allows for flexible team structures.
+</Note>
+
+## Editing Projects
+
+You can modify existing projects at any time:
+
+1. From the project listing, click the edit action for a project
+2. The system loads the current project data using `model_to_dict()`
+3. Modify any field:
+   - Change the project name
+   - Reassign the project leader
+   - Add or remove team members
+4. Save your changes
+
+```python
+# From view_proyectos.py - Edit workflow
+if action == 'editar':
+    with transaction.atomic():
+        id = request.POST['id']
+        proyecto = Proyectos.objects.get(id=id)
+        form = ProjectForm(request.POST, instance=proyecto)
+        if form.is_valid():
+            form.save()
+            messages.success(request, 'Proyectos guardado exitosamente!')
+```
+
+<Warning>
+All edit operations are wrapped in database transactions (`transaction.atomic()`) to ensure data consistency. If any part of the edit fails, all changes are rolled back.
+</Warning>
+
+## Viewing Project Listings
+
+The project listing page displays all active projects with their details:
+
+- **Project name** - The unique project identifier
+- **Leader name** - Who is leading the project
+- **Team members** - All assigned team members (encargados)
+- **Registration info** - When the project was created
+
+Projects are automatically sorted by project name and leader for easy navigation:
+
+```python
+# From view_proyectos.py - Listing query
+proyectos = Proyectos.objects.filter(status=True).order_by('nombre_proyecto', 'lider')
+```
+
+<Tip>
+Only active projects (where `status=True`) are displayed in the main listing. Deleted projects are hidden but preserved in the database.
+</Tip>
+
+## Soft Delete Functionality
+
+Proyecto uses **soft deletion** to maintain data integrity and audit trails:
+
+### How Soft Delete Works
+
+1. When you delete a project, it's not removed from the database
+2. Instead, the `status` field is set to `False`
+3. The project is filtered out of all standard listings
+4. Historical data and relationships are preserved
+
+```python
+# From view_proyectos.py - Soft delete implementation
+if action == 'eliminar':
+    with transaction.atomic():
+        id = request.POST['id']
+        proyectos = Proyectos.objects.get(id=id)
+        proyectos.status = False
+        proyectos.save()
+        messages.success(request, 'Proyectos eliminado')
+```
+
+### Benefits of Soft Deletion
+
+<AccordionGroup>
+  <Accordion title="Data Preservation">
+    All project history is maintained even after deletion, allowing you to review past projects and decisions.
+  </Accordion>
+  
+  <Accordion title="Relationship Integrity">
+    Related data like task assignments and team relationships remain intact in the database.
+  </Accordion>
+  
+  <Accordion title="Audit Trail">
+    Combined with automatic timestamps, you have a complete record of when projects were created and deleted.
+  </Accordion>
+  
+  <Accordion title="Recovery Option">
+    Deleted projects can potentially be recovered by changing the status back to True if needed.
+  </Accordion>
+</AccordionGroup>
+
+## Generating PDF Reports
+
+You can generate PDF reports for your projects in two formats:
+
+### Individual Project Report
+
+Generate a detailed report for a specific project by selecting the PDF action from the project listing.
+
+### Complete Project Listing
+
+Generate a comprehensive PDF report of all active projects:
+
+```python
+# From view_proyectos.py - PDF generation
+if action == 'pdflistado':
+    proyectos = Proyectos.objects.filter(status=True).order_by('nombre_proyecto', 'lider')
+    data['listado'] = []
+    for proyecto in proyectos:
+        encargados = [e.nombres for e in proyecto.encargados.all()]
+        data['listado'].append({
+            'pk': proyecto.pk,
+            'nombre_proyecto': proyecto.nombre_proyecto,
+            'lider': proyecto.lider.nombres,
+            'encargados': encargados
+        })
+    return render(request, 'pdf/Proyectos/listadoP.html', data)
+```
+
+The PDF report includes:
+- Project ID (primary key)
+- Project name
+- Leader name
+- Complete list of all team member names
+- Sorted alphabetically by project name and leader
+
+<Note>
+PDF reports only include active projects (status=True). Deleted projects are excluded from all reports.
+</Note>
+
+## User Interface Workflow
+
+The project management interface follows a consistent pattern:
+
+### Action-Based Navigation
+
+All project operations use an `action` parameter in the URL:
+- `?action=agregar` - Add a new project
+- `?action=editar&id=X` - Edit an existing project
+- `?action=eliminar&id=X` - Delete a project
+- `?action=pdflistado` - Generate PDF report
+- `?action=consultar&id=X` - View project details via AJAX
+
+### Form Validation
+
+The `ProjectForm` in `forms.py` provides validation and structure:
+
+```python
+class ProjectForm(forms.ModelForm):
+    class Meta:
+        model = Proyectos
+        fields = ['nombre_proyecto', 'lider','encargados']
+        widgets = {
+            'nombre_proyecto': forms.TextInput(attrs={'class': 'form-control'}),
+            'lider': forms.Select(attrs={'class': 'form-control'}),
+            'encargados': forms.SelectMultiple(attrs={'class': 'form_control select2'}),
+        }
+```
+
+<Tip>
+The team members field uses Select2 for an enhanced multi-select experience, making it easy to assign multiple team members to a project.
+</Tip>
+
+## Security and Authentication
+
+All project management operations require authentication:
+
+```python
+@login_required
+def viewProyectos(request):
+    # All project operations protected by login
+```
+
+You must be logged in to:
+- View the project listing
+- Create new projects
+- Edit existing projects
+- Delete projects
+- Generate PDF reports
+
+<Warning>
+Unauthorized users are redirected to the login page. All project data is protected behind authentication.
+</Warning>

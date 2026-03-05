@@ -1,0 +1,152 @@
+---
+title: Introduction to Proyecto
+description: A powerful Django-based project management system for teams
+---
+
+## What is Proyecto?
+
+Proyecto is a comprehensive Django-based project management system designed to help teams efficiently manage projects, tasks, and team members. Built with Django 3.2 and PostgreSQL, it provides a robust web interface for tracking work, assigning responsibilities, and generating detailed reports.
+
+<Note>
+Proyecto combines the power of Django's ORM with PostgreSQL's reliability to deliver a scalable solution for project management needs.
+</Note>
+
+## Key Features
+
+Proyecto offers a complete suite of project management capabilities:
+
+### Project Management
+- Create and manage multiple projects with ease
+- Assign project leaders and team members
+- Track project status and progress
+- Support for many-to-many relationships between projects and team members
+
+### Task Tracking
+- Create tasks and assign them to team members
+- Track task status with automatic timestamps
+- Monitor task completion and assignments
+- Filter and organize tasks by various criteria
+
+### Team Management
+- Manage team members (encargados) across the organization
+- Assign multiple team members to projects
+- Track team member workload and assignments
+- Prevent duplicate entries with built-in validation
+
+### PDF Report Generation
+- Generate PDF reports for projects and tasks
+- Export team member lists
+- Create professional documentation for stakeholders
+- Template-based report generation
+
+### Authentication & Security
+- Built-in Django authentication system
+- Login-required decorators for protected views
+- Session management with configurable timeouts
+- CSRF protection and security middleware
+
+## Architecture Overview
+
+Proyecto follows Django's MVT (Model-View-Template) architecture pattern:
+
+### Core Models
+
+The system is built around three main models defined in `CTP/models.py`:
+
+```python
+class ModeloBase(models.Model):
+    fecha_registro = models.DateField(auto_now_add=True)
+    hora_registro = models.TimeField(auto_now_add=True)
+    status = models.BooleanField(default=True)
+    
+    class Meta:
+        abstract = True
+
+class encargado(ModeloBase):
+    nombres = models.CharField(max_length=100)
+
+class Proyectos(ModeloBase):
+    nombre_proyecto = models.CharField(max_length=100)
+    lider = models.ForeignKey(encargado, on_delete=models.CASCADE)
+    encargados = models.ManyToManyField(encargado)
+
+class Tareas(ModeloBase):
+    nombre_tarea = models.CharField(max_length=100)
+    encargados = models.ForeignKey(encargado, on_delete=models.CASCADE)
+```
+
+<Tip>
+All models inherit from `ModeloBase`, which provides automatic timestamp tracking and soft delete functionality through the `status` field.
+</Tip>
+
+### Database Layer
+
+Proyecto uses PostgreSQL with the `psycopg2` adapter for reliable data persistence:
+
+- **Database Engine**: PostgreSQL via `django.db.backends.postgresql_psycopg2`
+- **Transaction Support**: Atomic requests enabled for data integrity
+- **ORM**: Django's powerful object-relational mapping
+
+### Application Structure
+
+The project consists of:
+- **CTP**: Main application module containing models, views, and forms
+- **proyecto**: Project configuration and settings
+- **seguridad**: Security and authentication module
+- **templates**: HTML templates for rendering views
+- **static**: CSS, JavaScript, and static assets
+- **media**: User-uploaded files and generated PDFs
+
+## Who Should Use Proyecto?
+
+Proyecto is ideal for:
+
+<CardGroup cols={2}>
+  <Card title="Small to Medium Teams" icon="users">
+    Teams looking for a straightforward project management solution without complex overhead
+  </Card>
+  
+  <Card title="Django Developers" icon="code">
+    Developers who want a customizable project management system built on familiar technology
+  </Card>
+  
+  <Card title="Organizations" icon="building">
+    Companies needing self-hosted project management with full control over their data
+  </Card>
+  
+  <Card title="Learning Projects" icon="graduation-cap">
+    Students and educators teaching Django web development and database design
+  </Card>
+</CardGroup>
+
+## Technology Stack
+
+- **Backend Framework**: Django 3.2.18
+- **Database**: PostgreSQL
+- **Database Adapter**: psycopg2 2.9.5
+- **Python Version**: 3.8+
+- **Additional Dependencies**: asgiref, pytz, sqlparse, typing_extensions
+
+<Warning>
+Proyecto requires Python 3.8 or higher and a running PostgreSQL database instance. Make sure these prerequisites are met before installation.
+</Warning>
+
+## Next Steps
+
+Ready to get started with Proyecto?
+
+<CardGroup cols={2}>
+  <Card title="Installation Guide" icon="download" href="/installation">
+    Follow our detailed installation instructions to set up Proyecto
+  </Card>
+  
+  <Card title="Quick Start" icon="rocket" href="/quickstart">
+    Get up and running quickly with our fast-track setup guide
+  </Card>
+</CardGroup>
+
+## Learn More
+
+- Explore the [Data Models](/api/models/projects) for detailed model documentation
+- Learn about [Views and Forms](/api/views/project-views) implementation
+- Read about [Production Deployment](/deployment/production) best practices

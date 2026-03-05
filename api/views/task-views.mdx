@@ -1,0 +1,405 @@
+---
+title: 'Task Views'
+description: 'API reference for task management view functions'
+---
+
+## Overview
+
+The `viewTareas` function is a Django view that handles all task-related operations including creating, editing, deleting, and listing tasks. This view is protected by the `@login_required` decorator and supports both GET and POST requests with action-based routing.
+
+**Location:** `CTP/view_registros.py:13`
+
+## Function Signature
+
+```python
+@login_required
+def viewTareas(request):
+    """
+    Main view function for managing tasks (Tareas)
+    
+    Args:
+        request: Django HttpRequest object
+        
+    Returns:
+        HttpResponse: Rendered template or redirect/JSON response
+    """
+```
+
+## Decorator
+
+<ParamField path="@login_required" type="decorator">
+  Requires user authentication before accessing this view. Unauthenticated users are redirected to the login page.
+</ParamField>
+
+## Request Parameters
+
+### Context Data
+
+The view initializes a context dictionary with default values:
+
+<ParamField path="empresa" type="string" default="Michael">
+  Company/organization name displayed in templates
+</ParamField>
+
+<ParamField path="nombre" type="string" default="Tareas">
+  Display name for the current section
+</ParamField>
+
+<ParamField path="ruta" type="string" default="/Tareas/">
+  Base URL path for task operations
+</ParamField>
+
+### Action Parameters
+
+<ParamField path="action" type="string" required>
+  Specifies the operation to perform. Supported values:
+  - `agregar` - Add new task
+  - `editar` - Edit existing task
+  - `eliminar` - Delete task (soft delete)
+  - `pdflistado` - Generate PDF listing
+  - `consultar` - Query task details (AJAX)
+</ParamField>
+
+<ParamField path="id" type="integer">
+  Task ID for edit, delete, and consultar actions
+</ParamField>
+
+## Actions
+
+### agregar (Add Task)
+
+Creates a new task with transaction management and duplicate validation.
+
+**GET Request:**
+```python
+# view_registros.py:74-77
+if action == 'agregar':
+    form = TareasForm
+    data['formulario'] = form
+    return render(request, 'Tareas/formulario.html', data)
+```
+
+**POST Request:**
+```python
+# view_registros.py:21-36
+if action == 'agregar':
+    with transaction.atomic():
+        try:
+            if Tareas.objects.filter(nombre_tarea=request.POST['nombre_tarea']).exists():
+                messages.error(request, 'El nombre está repetido')
+                return redirect('{}?action=agregar'.format(request.path))
+            else:
+                form = TareasForm(request.POST)
+                if form.is_valid():
+                    tareas = Tareas(nombre_tarea=form.cleaned_data['nombre_tarea'],
+                                    encargados=form.cleaned_data['encargados'])
+                    tareas.save(request)
+                    messages.success(request, 'Tarea Guardada Correctamente')
+        except Exception as ex:
+            messages.error(request, ex)
+```
+
+<Note>
+  **Duplicate Prevention:** The view checks if a task with the same `nombre_tarea` already exists before creating a new record.
+</Note>
+
+**Response Fields:**
+
+<ResponseField name="formulario" type="TareasForm">
+  Form instance for rendering in template (GET)
+</ResponseField>
+
+<ResponseField name="messages" type="Message[]">
+  Success or error messages added to Django message framework
+</ResponseField>
+
+### editar (Edit Task)
+
+Updates an existing task's information.
+
+**GET Request:**
+```python
+# view_registros.py:79-88
+elif action == 'editar':
+    try:
+        data['id'] = id = request.GET['id']
+        tareas = Tareas.objects.get(id=id)
+        form = TareasForm(initial=model_to_dict(tareas))
+        data['formulario'] = form
+        return render(request, 'Tareas/formulario.html', data)
+    except Exception as ex:
+        messages.error(request, ex)
+        return redirect('/Tareas/')
+```
+
+**POST Request:**
+```python
+# view_registros.py:38-48
+elif action == 'editar':
+    with transaction.atomic():
+        try:
+            id = request.POST['id']
+            tareas = Tareas.objects.get(id=id)
+            form = TareasForm(request.POST, instance=tareas)
+            if form.is_valid():
+                form.save()
+                messages.success(request, 'Tarea guardada exitosamente!')
+        except Exception as ex:
+            messages.error(request, ex)
+```
+
+<ParamField path="id" type="integer" required>
+  ID of the task to edit
+</ParamField>
+
+**Response:**
+
+<ResponseField name="formulario" type="TareasForm">
+  Pre-populated form instance with existing task data
+</ResponseField>
+
+### eliminar (Delete Task)
+
+Performs a soft delete by setting the `status` field to `False`.
+
+**GET Request:**
+```python
+# view_registros.py:90-97
+elif action == 'eliminar':
+    try:
+        data['id'] = id = request.GET['id']
+        data['Tareas'] = tareas = Tareas.objects.get(id=id)
+        return render(request, 'Tareas/eliminar.html', data)
+    except Exception as ex:
+        messages.error(request, ex)
+        return redirect(request, '/Tareas/')
+```
+
+**POST Request:**
+```python
+# view_registros.py:50-59
+elif action == 'eliminar':
+    with transaction.atomic():
+        try:
+            id = request.POST['id']
+            tareas = Tareas.objects.get(id=id)
+            tareas.status = False
+            tareas.save()
+            messages.success(request, 'Tareas eliminado')
+        except Exception as ex:
+            messages.error(request, ex)
+```
+
+<Note>
+  **Soft Delete:** Tasks are not permanently removed from the database. The `status` field is set to `False` to hide them from active listings.
+</Note>
+
+**Parameters:**
+
+<ParamField path="id" type="integer" required>
+  ID of the task to delete
+</ParamField>
+
+### pdflistado (PDF Listing)
+
+Generates a PDF-ready listing of all tasks.
+
+**GET Request:**
+```python
+# view_registros.py:99-101
+elif action == 'pdflistado':
+    data['listado'] = Tareas.objects.filter().order_by('nombre_tarea')
+    return render(request, 'pdf/Tareas/listadoP.html', data)
+```
+
+**POST Request:**
+```python
+# view_registros.py:61-67
+elif action == 'pdflistado':
+    try:
+        data['action'] = Tareas.objects.get(id=request.GET['id'])
+        template = get_template("pdf/Tareas/listadoP.html")
+        return JsonResponse({'data': template.render(data)})
+    except Exception as ex:
+        messages.error(request, ex)
+```
+
+<ResponseField name="listado" type="QuerySet">
+  Django QuerySet containing all tasks ordered by `nombre_tarea`
+</ResponseField>
+
+<ResponseField name="data" type="string">
+  Rendered HTML template (POST request returns JSON)
+</ResponseField>
+
+### consultar (Query Task Details)
+
+Returns task details as JSON for AJAX requests.
+
+**GET Request:**
+```python
+# view_registros.py:103-114
+elif action == 'consultar':
+    try:
+        resultado = True
+        data['id'] = id = request.GET['id']
+        data['Tareas'] = tareas = Tareas.objects.get(id=id)
+        template = get_template('Tareas/listadoajax.html')
+        return JsonResponse({"result": resultado, 'data': template.render(data)})
+    except Exception as ex:
+        resultado = False
+        mensaje = ex
+        return JsonResponse({"result": resultado, 'mensaje': mensaje})
+```
+
+<ParamField path="id" type="integer" required>
+  ID of the task to query
+</ParamField>
+
+**Response:**
+
+<ResponseField name="result" type="boolean">
+  Operation success status
+</ResponseField>
+
+<ResponseField name="data" type="string">
+  Rendered HTML template containing task details (on success)
+</ResponseField>
+
+<ResponseField name="mensaje" type="string">
+  Error message (on failure)
+</ResponseField>
+
+## Default View (Listing)
+
+When no action is specified, the view returns a listing of all active tasks:
+
+```python
+# view_registros.py:118-123
+try:
+    data['listado'] = Tareas.objects.filter(status=True).order_by(
+        'nombre_tarea', 'encargados')
+except Exception as ex:
+    print(ex)
+return render(request, 'Tareas/listado.html', data)
+```
+
+**Response:**
+
+<ResponseField name="listado" type="QuerySet">
+  Django QuerySet containing all active tasks (status=True) ordered by task name and assigned person
+</ResponseField>
+
+## Transaction Management
+
+All write operations (agregar, editar, eliminar) use Django's `transaction.atomic()` context manager to ensure database consistency:
+
+```python
+with transaction.atomic():
+    try:
+        # Database operations
+    except Exception as ex:
+        messages.error(request, ex)
+```
+
+<Note>
+  **Atomicity:** If any error occurs during a transaction, all database changes are rolled back automatically to maintain data integrity.
+</Note>
+
+## Message Framework
+
+The view uses Django's message framework for user feedback:
+
+<ResponseField name="messages.success" type="method">
+  Displays success messages after successful operations
+  
+  **Examples:**
+  - "Tarea Guardada Correctamente" (after creating task)
+  - "Tarea guardada exitosamente!" (after editing task)
+  - "Tareas eliminado" (after deleting task)
+</ResponseField>
+
+<ResponseField name="messages.error" type="method">
+  Displays error messages when operations fail
+  
+  **Examples:**
+  - "El nombre está repetido" (duplicate task name)
+  - Exception messages from try/except blocks
+</ResponseField>
+
+## Form Integration
+
+The view integrates with [TareasForm](/api/forms#tareasform) for data validation and rendering:
+
+```python
+from CTP.forms import TareasForm
+```
+
+## Custom Save Method
+
+The task model uses a custom save method that accepts the request object:
+
+```python
+# view_registros.py:32
+tareas.save(request)
+```
+
+<Note>
+  The `Tareas` model has a custom `save()` method that accepts a request parameter, allowing it to capture additional context during creation.
+</Note>
+
+## Dependencies
+
+```python
+from django.contrib import messages
+from django.db import transaction
+from django.forms import model_to_dict
+from django.http import JsonResponse
+from django.shortcuts import render, redirect
+from django.template.loader import get_template
+from django.contrib.auth.decorators import login_required
+from CTP.forms import TareasForm
+from CTP.models import Tareas
+```
+
+## URL Routing
+
+**Base Path:** `/Tareas/`
+
+**Action URLs:**
+- `/Tareas/?action=agregar` - Add new task
+- `/Tareas/?action=editar&id=1` - Edit task with ID 1
+- `/Tareas/?action=eliminar&id=1` - Delete task with ID 1
+- `/Tareas/?action=pdflistado` - Generate PDF listing
+- `/Tareas/?action=consultar&id=1` - Query task details
+
+## Template Integration
+
+The view renders different templates based on the action:
+
+<ResponseField name="Tareas/formulario.html" type="template">
+  Form template for adding and editing tasks
+</ResponseField>
+
+<ResponseField name="Tareas/eliminar.html" type="template">
+  Confirmation template for task deletion
+</ResponseField>
+
+<ResponseField name="Tareas/listado.html" type="template">
+  Main listing template for displaying all active tasks
+</ResponseField>
+
+<ResponseField name="pdf/Tareas/listadoP.html" type="template">
+  PDF-ready template for task listings
+</ResponseField>
+
+<ResponseField name="Tareas/listadoajax.html" type="template">
+  AJAX template fragment for task details
+</ResponseField>
+
+## Related Resources
+
+- [TareasForm Reference](/api/forms#tareasform)
+- [Tareas Model](/api/models/tasks)
+- [Project Views](/api/views/project-views)
+- [Team Views](/api/views/team-views)

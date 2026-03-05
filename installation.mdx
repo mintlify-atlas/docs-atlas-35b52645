@@ -1,0 +1,369 @@
+---
+title: Installation Guide
+description: Complete step-by-step installation instructions for Proyecto
+---
+
+## Prerequisites
+
+Before installing Proyecto, ensure you have the following installed on your system:
+
+<CardGroup cols={2}>
+  <Card title="Python 3.8+" icon="python">
+    Required for running Django and the application
+  </Card>
+  
+  <Card title="PostgreSQL" icon="database">
+    Database system for data persistence
+  </Card>
+  
+  <Card title="pip" icon="box">
+    Python package manager for installing dependencies
+  </Card>
+  
+  <Card title="Git" icon="git">
+    Version control system for cloning the repository
+  </Card>
+</CardGroup>
+
+### Verify Prerequisites
+
+Check that you have the correct versions installed:
+
+```bash
+python --version  # Should be 3.8 or higher
+psql --version    # PostgreSQL installation
+pip --version     # pip package manager
+```
+
+<Note>
+On some systems, you may need to use `python3` and `pip3` instead of `python` and `pip`.
+</Note>
+
+## Installation Steps
+
+<Steps>
+  <Step title="Clone the Repository">
+    Clone the Proyecto repository to your local machine:
+    
+    ```bash
+    git clone <repository-url>
+    cd proyecto
+    ```
+  </Step>
+
+  <Step title="Create Virtual Environment">
+    Create and activate a Python virtual environment to isolate dependencies:
+    
+    <CodeGroup>
+    ```bash Linux/macOS
+    python -m venv venv
+    source venv/bin/activate
+    ```
+    
+    ```bash Windows
+    python -m venv venv
+    venv\Scripts\activate
+    ```
+    </CodeGroup>
+    
+    <Tip>
+    You should see `(venv)` prefix in your terminal prompt when the virtual environment is active.
+    </Tip>
+  </Step>
+
+  <Step title="Install Dependencies">
+    Install all required Python packages from `requirements.txt`:
+    
+    ```bash
+    pip install -r requirements.txt
+    ```
+    
+    This will install:
+    - **Django 3.2.18**: Web framework
+    - **psycopg2 2.9.5**: PostgreSQL database adapter
+    - **asgiref 3.4.1**: ASGI specification implementation
+    - **pytz 2022.7.1**: Timezone support
+    - **sqlparse 0.4.3**: SQL parsing library
+    - **typing_extensions 4.1.1**: Type hints support
+    
+    <Note>
+    Installation may take a few minutes depending on your internet connection.
+    </Note>
+  </Step>
+
+  <Step title="Create PostgreSQL Database">
+    Create a new PostgreSQL database for Proyecto:
+    
+    ```bash
+    # Login to PostgreSQL
+    psql -U postgres
+    
+    # Create database
+    CREATE DATABASE Proyecto;
+    
+    # Exit PostgreSQL
+    \q
+    ```
+    
+    <Warning>
+    The database name must match the `NAME` field in your Django settings configuration.
+    </Warning>
+  </Step>
+
+  <Step title="Configure Database Settings">
+    Update the database configuration in `proyecto/settings.py`:
+    
+    ```python proyecto/settings.py
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.postgresql_psycopg2',
+            'NAME': 'Proyecto',
+            'USER': 'postgres',
+            'PASSWORD': 'your_password',
+            'HOST': 'localhost',
+            'PORT': '5432',
+            'ATOMIC_REQUESTS': True,
+        }
+    }
+    ```
+    
+    Replace `'your_password'` with your PostgreSQL password.
+    
+    <Tip>
+    For security, consider using environment variables for sensitive credentials instead of hardcoding them.
+    </Tip>
+  </Step>
+
+  <Step title="Update Secret Key (Production)">
+    For production deployments, generate a new secret key:
+    
+    ```python
+    # In Python shell
+    from django.core.management.utils import get_random_secret_key
+    print(get_random_secret_key())
+    ```
+    
+    Update `SECRET_KEY` in `proyecto/settings.py` with the generated value.
+    
+    <Warning>
+    Never commit your secret key to version control. The default key in the repository should only be used for development.
+    </Warning>
+  </Step>
+
+  <Step title="Configure Allowed Hosts">
+    Update `ALLOWED_HOSTS` in `proyecto/settings.py` for your environment:
+    
+    ```python proyecto/settings.py
+    # Development
+    ALLOWED_HOSTS = ['127.0.0.1', 'localhost']
+    
+    # Production - add your domain
+    ALLOWED_HOSTS = ['yourdomain.com', 'www.yourdomain.com']
+    ```
+  </Step>
+
+  <Step title="Run Database Migrations">
+    Apply all database migrations to create the necessary tables:
+    
+    ```bash
+    python manage.py migrate
+    ```
+    
+    You should see output confirming the migration of Django's built-in apps and the CTP application:
+    
+    ```
+    Running migrations:
+      Applying contenttypes.0001_initial... OK
+      Applying auth.0001_initial... OK
+      Applying CTP.0001_initial... OK
+      ...
+    ```
+  </Step>
+
+  <Step title="Create Superuser Account">
+    Create an admin account to access the Django admin interface:
+    
+    ```bash
+    python manage.py createsuperuser
+    ```
+    
+    Follow the prompts to set:
+    - Username
+    - Email address
+    - Password
+    
+    <Note>
+    This account will have full administrative access to the system.
+    </Note>
+  </Step>
+
+  <Step title="Collect Static Files (Production)">
+    For production deployments, collect all static files:
+    
+    ```bash
+    python manage.py collectstatic
+    ```
+    
+    This gathers static files from all applications into a single directory for serving.
+  </Step>
+
+  <Step title="Verify Installation">
+    Run the development server to verify everything is working:
+    
+    ```bash
+    python manage.py runserver
+    ```
+    
+    Open your browser and navigate to `http://127.0.0.1:8000/`
+    
+    <Tip>
+    If you see the Proyecto interface, congratulations! Your installation is successful.
+    </Tip>
+  </Step>
+</Steps>
+
+## Directory Structure
+
+After installation, your project directory should look like this:
+
+```
+proyecto/
+├── CTP/                    # Main application
+│   ├── migrations/         # Database migrations
+│   ├── models.py          # Data models
+│   ├── views.py           # View logic
+│   ├── forms.py           # Form definitions
+│   └── urls.py            # URL routing
+├── proyecto/              # Project configuration
+│   ├── settings.py        # Django settings
+│   ├── urls.py            # Root URL config
+│   └── wsgi.py            # WSGI application
+├── templates/             # HTML templates
+├── static/                # Static files (CSS, JS)
+├── media/                 # User uploads
+├── manage.py              # Django management script
+├── requirements.txt       # Python dependencies
+└── db.sqlite3            # Development database (if using SQLite)
+```
+
+## Configuration Options
+
+### Session Settings
+
+Proyecto includes session timeout configuration in `settings.py`:
+
+```python
+SESSION_COOKIE_AGE = 300  # 5 minutes (in seconds)
+SESSION_EXPIRE_AT_BROWSER_CLOSE = True
+```
+
+<Tip>
+Adjust `SESSION_COOKIE_AGE` to set how long users remain logged in.
+</Tip>
+
+### Static Files
+
+Static files configuration:
+
+```python
+STATIC_URL = '/static/'
+STATICFILES_DIRS = (BASE_DIR / 'static',)
+```
+
+### Media Files
+
+Media files for uploads and generated PDFs:
+
+```python
+MEDIA_URL = '/media/'
+MEDIA_ROOT = BASE_DIR / 'media'
+```
+
+## Troubleshooting
+
+### Common Issues
+
+<AccordionGroup>
+  <Accordion title="ImportError: No module named 'django'">
+    Make sure your virtual environment is activated and Django is installed:
+    
+    ```bash
+    source venv/bin/activate  # On Windows: venv\Scripts\activate
+    pip install -r requirements.txt
+    ```
+  </Accordion>
+
+  <Accordion title="psycopg2 installation fails">
+    On some systems, you may need to install PostgreSQL development headers:
+    
+    ```bash
+    # Ubuntu/Debian
+    sudo apt-get install postgresql-dev python3-dev
+    
+    # macOS
+    brew install postgresql
+    
+    # Then retry
+    pip install psycopg2
+    ```
+  </Accordion>
+
+  <Accordion title="Database connection refused">
+    Verify PostgreSQL is running and credentials are correct:
+    
+    ```bash
+    # Check PostgreSQL status
+    sudo service postgresql status
+    
+    # Start PostgreSQL if stopped
+    sudo service postgresql start
+    ```
+    
+    Verify your `DATABASES` settings in `settings.py` match your PostgreSQL configuration.
+  </Accordion>
+
+  <Accordion title="Migrations fail to apply">
+    If migrations fail, try:
+    
+    ```bash
+    # Check migration status
+    python manage.py showmigrations
+    
+    # Fake initial migration if needed
+    python manage.py migrate --fake-initial
+    
+    # Or reset migrations (CAUTION: data loss)
+    python manage.py migrate CTP zero
+    python manage.py migrate
+    ```
+  </Accordion>
+</AccordionGroup>
+
+### Getting Help
+
+If you encounter issues not covered here:
+
+1. Check the [Django documentation](https://docs.djangoproject.com/)
+2. Review the [PostgreSQL documentation](https://www.postgresql.org/docs/)
+3. Open an issue in the project repository
+4. Check existing issues for similar problems
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Quick Start Guide" icon="rocket" href="/quickstart">
+    Learn how to create your first project and tasks
+  </Card>
+  
+  <Card title="Core Features" icon="code" href="/features/projects">
+    Explore project management features
+  </Card>
+  
+  <Card title="Workflow Guide" icon="diagram-project" href="/guide/workflow">
+    Learn the complete workflow
+  </Card>
+  
+  <Card title="Configuration" icon="gear" href="/deployment/configuration">
+    Configure settings for your environment
+  </Card>
+</CardGroup>
