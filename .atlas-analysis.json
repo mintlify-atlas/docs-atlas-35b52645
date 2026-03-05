@@ -1,0 +1,100 @@
+{
+  "projectType": "saas",
+  "projectName": "Proyecto",
+  "projectDescription": "A Django-based project management system for tracking projects, tasks, and team members with PDF reporting capabilities.",
+  "theme": "almond",
+  "primaryColor": "#2563eb",
+  "lightColor": "#60a5fa",
+  "darkColor": "#1e40af",
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Documentation",
+        "groups": [
+          {
+            "group": "Get Started",
+            "pages": [
+              "introduction",
+              "installation",
+              "quickstart"
+            ]
+          },
+          {
+            "group": "Core Features",
+            "pages": [
+              "features/projects",
+              "features/tasks",
+              "features/team-management"
+            ]
+          },
+          {
+            "group": "User Guide",
+            "pages": [
+              "guide/authentication",
+              "guide/workflow",
+              "guide/pdf-reports"
+            ]
+          },
+          {
+            "group": "Deployment",
+            "pages": [
+              "deployment/database-setup",
+              "deployment/configuration",
+              "deployment/production"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "API Reference",
+        "groups": [
+          {
+            "group": "Data Models",
+            "pages": [
+              "api/models/projects",
+              "api/models/tasks",
+              "api/models/team-members"
+            ]
+          },
+          {
+            "group": "Views & Forms",
+            "pages": [
+              "api/views/project-views",
+              "api/views/task-views",
+              "api/views/team-views",
+              "api/forms"
+            ]
+          },
+          {
+            "group": "Configuration",
+            "pages": [
+              "api/settings",
+              "api/urls"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "keyFeatures": [
+    "Project management with team assignment and leader designation",
+    "Task tracking with responsible team member assignment",
+    "Team member (encargado) management system",
+    "PDF report generation for projects, tasks, and team listings",
+    "User authentication and session management",
+    "PostgreSQL database integration",
+    "CRUD operations with soft delete functionality",
+    "Bootstrap-based responsive UI"
+  ],
+  "publicApiSurface": [
+    "viewProyectos - Project management view with CRUD operations",
+    "viewTareas - Task management view with CRUD operations",
+    "viewtrabajadores - Team member management view with CRUD operations",
+    "Proyectos - Project model with name, leader, and team members",
+    "Tareas - Task model with name and assigned team member",
+    "encargado - Team member model",
+    "ProjectForm - Form for creating and editing projects",
+    "TareasForm - Form for creating and editing tasks",
+    "trabajadoresForm - Form for creating and editing team members"
+  ]
+}
